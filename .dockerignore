@@ -1,5 +1,0 @@
-**/node_modules
-frontend/dist
-backend/var
-**/__pycache__
-.git

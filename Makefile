@@ -1,4 +1,4 @@
-.PHONY: install dev api web build test run docker
+.PHONY: install dev api web build test run
 install:
 	pip install -r backend/requirements-dev.txt
 	cd frontend && npm ci
@@ -12,5 +12,3 @@ test:
 	cd backend && python -m pytest -q
 run: build
 	cd backend && uvicorn app.main:app --port 8000
-docker:
-	docker compose up --build

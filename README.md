@@ -20,13 +20,11 @@ The dashboard is an **offline-first PWA** in **English / हिन्दी / �
 
 ## Quick start
 
-```bash
-# Option A — one container (SQLite; runs on a site laptop without internet after the first load)
-docker compose up --build            # → http://localhost:8000   (API docs at /docs)
+Requires Python 3.11+ and Node 18+.
 
-# Option B — local dev
+```bash
 make install                         # pip + npm
-make run                             # builds the dashboard, serves API + UI on :8000
+make run                             # builds the dashboard, serves API + UI on http://localhost:8000 (API docs at /docs)
 # or hot-reload:  make api  (port 8000)  +  make web  (port 5173, proxies /api)
 
 make test                            # 18 backend tests incl. scientific guardrails
@@ -34,7 +32,7 @@ make test                            # 18 backend tests incl. scientific guardra
 
 On first start the server generates the (deterministic) demo dataset, seeds the database and trains every model. This takes about 30 s and is cached after that. `/api/health` reports `training` until it is ready.
 
-PostgreSQL/PostGIS: `docker compose --profile postgis up`, then set `DATABASE_URL=postgresql+psycopg2://mh:<password>@db:5432/manganese_horizon`. `db/postgis_schema.sql` adds geometry columns and GiST indexes.
+The default database is SQLite (no setup, works on a site laptop). For PostgreSQL/PostGIS, run `db/postgis_schema.sql` on the server and set `DATABASE_URL=postgresql+psycopg2://<user>:<password>@<host>:5432/manganese_horizon`.
 
 ## Repository layout
 
