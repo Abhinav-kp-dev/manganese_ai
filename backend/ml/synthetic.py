@@ -261,7 +261,7 @@ def generate_production(rng: np.random.Generator):
             p = min(capacity, muck)
             muck -= p
             prod[i] = p
-            stock = max(0.0, stock + p - rated * 0.82 * rng.uniform(0.9, 1.1))
+            stock = max(0.0, stock + p - (rated * 0.8 + 0.03 * (stock - 6 * rated)) * rng.uniform(0.9, 1.1))
             stock_arr[i] = stock
 
         daily = pd.DataFrame({

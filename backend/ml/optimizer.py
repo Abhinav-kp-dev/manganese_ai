@@ -172,7 +172,8 @@ def optimise(forecasts: list[dict], attribution: dict) -> dict:
                 acts.append({
                     "lever": info["lever"], "action_title": info["title"], "tonnes": t, "cost_inr": t * info["cost"],
                     "cost_per_tonne_inr": info["cost"], "additional_operating_days": None,
-                    "reason": f"Addresses '{info['driver']}' ({drv:+,.0f} t SHAP contribution)." if drv else f"Addresses '{info['driver']}'.",
+                    "reason": (f"Addresses '{info['driver']}' ({drv:+,.0f} t SHAP contribution)." if drv < 0
+                               else "Uses unscheduled calendar days; lower cost than the remaining alternatives in the LP."),
                     "detail": info["detail"], "supporting_features": _supporting(fc, info["lever"]),
                     "assumptions": info["assumptions"],
                 })

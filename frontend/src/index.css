@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html[lang="hi"] body, html[lang="mr"] body { font-family: "Noto Sans Devanagari", Inter, system-ui, sans-serif; }
+body { background: #0b0f17; }
+.card { @apply rounded-xl border border-ink-700 bg-ink-900/80 p-4; }
+.card-title { @apply text-xs font-semibold uppercase tracking-wider text-ink-400; }
+.btn { @apply inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-40; }
+.btn-primary { @apply btn bg-mn-600 text-white hover:bg-mn-500; }
+.btn-ghost { @apply btn border border-ink-600 text-ink-100 hover:bg-ink-800; }
+.input { @apply rounded-lg border border-ink-600 bg-ink-800 px-2 py-1.5 text-sm text-ink-100 focus:border-mn-500 focus:outline-none; }
+.num { @apply font-mono tabular-nums; }
+table.data { @apply w-full text-sm; }
+table.data th { @apply border-b border-ink-700 px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-400; }
+table.data td { @apply border-b border-ink-800 px-2 py-1.5; }
+.leaflet-container { background: #0b0f17; font-family: inherit; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #18202f; color: #e8ecf4; }
+.tour-highlight { outline: 2px solid #fbbf24; outline-offset: 4px; border-radius: 12px; transition: outline 0.2s; }
+
+@media print {
+  body { background: white !important; color: #111 !important; }
+  .no-print { display: none !important; }
+  .print-page { color: #111; background: white; }
+  .card { border-color: #ccc !important; background: white !important; }
+}
