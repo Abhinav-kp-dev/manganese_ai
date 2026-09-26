@@ -69,7 +69,8 @@ def test_upload_validation_rejects_bad_rows(client):
 
 
 def test_audit_roundtrip(client):
-    r = client.post("/api/audit", json={"recommendation_key": "k", "action_title": "t", "decision": "APPROVED", "decided_by": "Planner"})
+    r = client.post("/api/audit", json={"recommendation_key": "k", "action_title": "t", "mine_id": "BLG-01", "decision": "APPROVED"})
     assert r.status_code == 200
-    assert client.get("/api/audit").json()["entries"][0]["decision"] == "APPROVED"
-    assert client.post("/api/audit", json={"recommendation_key": "k", "action_title": "t", "decision": "MAYBE", "decided_by": "x"}).status_code == 422
+    e = client.get("/api/audit").json()["entries"][0]
+    assert e["decision"] == "APPROVED" and e["role"] == "ADMIN" and e["decided_by"] == "Control Room Administrator"
+    assert client.post("/api/audit", json={"recommendation_key": "k", "action_title": "t", "decision": "MAYBE"}).status_code == 422

@@ -160,11 +160,54 @@ class AuditEntry(Base):
     action_title: Mapped[str] = mapped_column(Text)
     decision: Mapped[str] = mapped_column(String(16))
     decided_by: Mapped[str] = mapped_column(String(64))
+    mine_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    role: Mapped[str | None] = mapped_column(String(16), nullable=True)
     note: Mapped[str] = mapped_column(Text, default="")
     client_timestamp: Mapped[str | None] = mapped_column(String(40), nullable=True)
     synced_offline: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class ExternalWeather(Base):
+    """Real observations pulled by the pipeline (e.g. NASA POWER), kept apart from model features."""
+    __tablename__ = "external_weather"
+    source: Mapped[str] = mapped_column(String(32), primary_key=True)
+    mine_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    month: Mapped[datetime] = mapped_column(Date, primary_key=True)
+    rainfall_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rainy_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    soil_moisture: Mapped[float | None] = mapped_column(Float, nullable=True)
+    land_surface_temp_c: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    is_synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class PipelineRun(Base):
+    __tablename__ = "pipeline_runs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job: Mapped[str] = mapped_column(String(32))
+    trigger: Mapped[str] = mapped_column(String(16))  # schedule | manual | cli | startup
+    status: Mapped[str] = mapped_column(String(16))   # running | ok | skipped | failed
+    message: Mapped[str] = mapped_column(Text, default="")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 def init_db():
+    from . import auth  # noqa: F401  (registers the users table)
     Base.metadata.create_all(engine)
+    _add_missing_columns()
+
+
+def _add_missing_columns():
+    """Minimal forward-only migration: add nullable columns introduced after a DB was created."""
+    from sqlalchemy import inspect, text
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if not insp.has_table(table.name):
+                continue
+            have = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name not in have and col.nullable:
+                    conn.execute(text(f'ALTER TABLE {table.name} ADD COLUMN {col.name} {col.type.compile(engine.dialect)}'))

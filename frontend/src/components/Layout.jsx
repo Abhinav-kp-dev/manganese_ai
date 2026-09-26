@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Activity, CloudOff, FileText, Gauge, Layers, Menu, PlayCircle, ShieldCheck, SlidersHorizontal, Wrench, X } from "lucide-react";
+import { Activity, CloudOff, LogOut, FileText, Gauge, Layers, Menu, PlayCircle, ShieldCheck, SlidersHorizontal, Wrench, X } from "lucide-react";
 import { flushQueue, pendingCount, useApi } from "../api.js";
 import { LANGS, useI18n } from "../i18n.jsx";
+import { useAuth } from "../auth.jsx";
 
 const NAV = [
   { to: "/", key: "nav_overview", icon: Gauge },
@@ -35,6 +36,7 @@ export default function Layout() {
   const { t, lang, setLang } = useI18n();
   const meta = useApi("/api/meta");
   const { online, pending } = useOnline();
+  const { user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const [tour, setTour] = useState(false);
   const loc = useLocation();
@@ -67,7 +69,13 @@ export default function Layout() {
               </NavLink>
             ))}
           </nav>
-          <div className="mt-6 space-y-3 px-5 text-xs text-ink-400">
+          <div className="mx-3 mt-5 rounded-lg border border-ink-700 bg-ink-800/60 p-3 text-xs">
+            <div className="font-medium text-ink-100">{user.full_name}</div>
+            <div className="text-mn-300">{user.role_label}</div>
+            <div className="text-ink-400">Site scope: {user.site_scope === "ALL" ? "All mines" : user.site_scope}</div>
+            <button className="mt-2 flex items-center gap-1 text-ink-300 hover:text-rose-300" onClick={signOut}><LogOut className="h-3 w-3" /> Sign out</button>
+          </div>
+          <div className="mt-4 space-y-3 px-5 text-xs text-ink-400">
             <button className="btn-primary w-full justify-center" onClick={() => setTour(true)}><PlayCircle className="h-4 w-4" /> {t("guided_demo")}</button>
             <label className="block">
               <span className="mb-1 block">{t("language")}</span>

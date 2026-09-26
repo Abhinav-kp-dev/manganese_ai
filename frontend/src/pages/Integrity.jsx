@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { CheckCircle2, Download, ExternalLink, Upload, XCircle } from "lucide-react";
+import { CheckCircle2, Download, ExternalLink, Play, Upload, XCircle } from "lucide-react";
 import { api, useApi } from "../api.js";
 import { useI18n } from "../i18n.jsx";
+import { useAuth } from "../auth.jsx";
 import { Card, Note, PageHeader, StaleNote, useLoaded } from "../components/ui.jsx";
 
 export default function Integrity() {
   const { t } = useI18n();
+  const { can } = useAuth();
   const q = useApi("/api/integrity");
   const gate = useLoaded(q);
   if (gate) return gate;
@@ -60,8 +62,54 @@ export default function Integrity() {
         </div>
       </Card>
 
-      <Uploader onDone={q.reload} />
+      <Pipeline canRun={can("run_pipeline")} />
+      {can("upload_data") ? <Uploader onDone={q.reload} /> : <Note>Uploading MOIL data needs the Administrator, Planner or Geologist role.</Note>}
     </div>
+  );
+}
+
+function Pipeline({ canRun }) {
+  const q = useApi("/api/pipeline");
+  const [busy, setBusy] = useState(null);
+  const run = async (job) => {
+    setBusy(job);
+    try { await api(`/api/pipeline/run/${job}`, { method: "POST" }); } catch { /* shown in run log */ }
+    finally { setBusy(null); q.reload(); }
+  };
+  const d = q.data;
+  if (!d) return null;
+  const tone = { ok: "text-emerald-300", failed: "text-rose-300", running: "text-amber-300", skipped: "text-ink-400" };
+  return (
+    <Card id="pipeline" title="Scheduled data pipeline"
+      right={canRun && <button className="btn-primary text-xs" disabled={!!busy} onClick={() => run("all")}><Play className="h-3 w-3" /> {busy === "all" ? "Running…" : "Run all now"}</button>}>
+      <p className="mb-3 text-xs text-ink-400">
+        {d.schedule.enabled ? `Runs automatically every ${d.schedule.interval_minutes} min` : "Automatic schedule disabled (MH_PIPELINE_INTERVAL_MIN=0)"}{d.schedule.next_run ? ` · next ${d.schedule.next_run.slice(0, 16).replace("T", " ")} UTC` : ""}.
+        For cron: <code className="text-ink-300">{d.schedule.cron_example}</code>
+      </p>
+      <div className="grid gap-3 md:grid-cols-3">
+        {d.jobs.map((j) => (
+          <div key={j.job} className="rounded-lg border border-ink-700 bg-ink-800/40 p-3 text-xs">
+            <div className="flex items-center justify-between"><span className="font-mono text-sm text-ink-100">{j.job}</span>
+              {canRun && <button className="btn-ghost py-0.5 text-[11px]" disabled={!!busy} onClick={() => run(j.job)}>{busy === j.job ? "…" : "Run"}</button>}</div>
+            <p className="mt-1 text-ink-400">{j.description}</p>
+            <p className={`mt-2 ${tone[j.last_status] || "text-ink-400"}`}>{j.last_status ? `${j.last_status} — ${j.last_message}` : "never run"}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="text-xs">
+          <div className="card-title mb-1">Real external data stored</div>
+          {d.external_data.length === 0 ? <p className="text-ink-400">None yet. The NASA POWER job needs internet access to power.larc.nasa.gov.</p> :
+            d.external_data.map((x) => <p key={x.source} className="text-ink-300">{x.source}: {x.mine_months} mine-months ({x.from?.slice(0, 7)} → {x.to?.slice(0, 7)})</p>)}
+          <p className="mt-1 text-ink-400">Drop MOIL CSV exports into <code>{d.inbox_path}</code>; the inbox job validates and loads them.</p>
+        </div>
+        <div className="max-h-44 overflow-auto">
+          <table className="data text-[11px]"><thead><tr><th>Run</th><th>Job</th><th>Trigger</th><th>Status</th><th>Message</th></tr></thead>
+            <tbody>{d.recent_runs.slice(0, 12).map((r) => <tr key={r.id}><td className="font-mono">{r.started_at?.slice(5, 16).replace("T", " ")}</td><td>{r.job}</td><td>{r.trigger}</td><td className={tone[r.status]}>{r.status}</td><td className="text-ink-400">{r.message}</td></tr>)}</tbody>
+          </table>
+        </div>
+      </div>
+    </Card>
   );
 }
 

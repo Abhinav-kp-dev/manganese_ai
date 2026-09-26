@@ -24,8 +24,9 @@ Every item below is enforced in code and most are re-checked live on the **Data 
 
 ## Known limitations
 
-1. MOIL's internal telemetry is not public; demo data is synthetic (the upload path to real data is built and tested).
+1. MOIL's internal telemetry is not public; demo production and borehole data are synthetic. Real data paths are built and tested: CSV upload, the inbox drop-folder job, and the NASA POWER weather connector (which needs internet access to power.larc.nasa.gov).
 2. Few positive occurrences → wide AUC confidence interval.
 3. Optical indices degrade under monsoon cloud; SAR mitigates but does not eliminate this.
 4. Action costs are indicative; rail/road logistics are not yet modelled.
-5. Accuracy on synthetic data overstates what real data will give.
+5. Accuracy on synthetic data overstates what real data will give; there are no real-data validation numbers yet.
+6. Sign-in is local (username/password with signed tokens); MOIL directory (LDAP/SSO) integration is a deployment step.

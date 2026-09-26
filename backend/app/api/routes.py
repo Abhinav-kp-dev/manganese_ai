@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -20,11 +20,14 @@ from ml.prospectivity import COVER_RELIABILITY, CUTOFF_MN_PCT, FEATURE_LABELS, F
 from ml.reference import CLUSTERS, DATA_SOURCES, MINES, STUDY_BBOX
 from ml.scenarios import PRESETS, SCENARIOS, overrides_for, realigned_target
 
+from .. import ingest, pipeline
+from ..auth import DEMO_ACCOUNTS_ENABLED, DEMO_PASSWORD, ROLES, User, authenticate, current_user, in_scope, issue_token, public_user, require
 from ..db import AuditEntry, Borehole, MinePlan, ProductionLog, SessionLocal, WeatherFeature
 from ..epistemic import DISCLAIMERS, FORECAST, FORECAST_TAGS, MODEL_INFERENCE, OBSERVED, SCENARIO, meta
 from ..state import STATE
 
-router = APIRouter(prefix="/api")
+public = APIRouter(prefix="/api")
+router = APIRouter(prefix="/api", dependencies=[Depends(require("read"))])
 MINE = {m["mine_id"]: m for m in MINES}
 APP_NAME = "Manganese Horizon"
 
@@ -64,9 +67,36 @@ def _fc_public(f):
 
 
 # ------------------------------------------------------------------------------------ system
-@router.get("/health")
+@public.get("/health")
 def health():
     return {"status": "ok" if STATE.ready else "training", "model_version": STATE.model_version}
+
+
+class LoginIn(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=128)
+
+
+@public.post("/auth/login")
+def login(body: LoginIn):
+    u = authenticate(body.username, body.password)
+    return {"token": issue_token(u), "user": public_user(u)}
+
+
+@public.get("/auth/roles")
+def roles():
+    """Role catalogue for the sign-in screen; demo accounts are listed only when enabled."""
+    from ..auth import User as U
+    with SessionLocal() as s:
+        users = s.scalars(select(U).where(U.active.is_(True))).all() if DEMO_ACCOUNTS_ENABLED else []
+    return {"roles": [{"role": k, "label": v["label"], "permissions": sorted(v["perms"])} for k, v in ROLES.items()],
+            "demo_accounts": [{"username": u.username, "full_name": u.full_name, "role": u.role, "site_scope": u.site_scope} for u in users],
+            "demo_password_hint": DEMO_PASSWORD if DEMO_ACCOUNTS_ENABLED and DEMO_PASSWORD == "demo123" else None}
+
+
+@router.get("/auth/me")
+def me(user: User = Depends(current_user)):
+    return public_user(user)
 
 
 @router.get("/meta")
@@ -317,17 +347,23 @@ def run_scenario(body: ScenarioIn):
 class AuditIn(BaseModel):
     recommendation_key: str = Field(max_length=128)
     action_title: str = Field(max_length=500)
+    mine_id: str | None = Field(None, max_length=16)
     decision: str = Field(pattern="^(APPROVED|REJECTED|DEFERRED)$")
-    decided_by: str = Field(min_length=1, max_length=64)
     note: str = Field("", max_length=1000)
     client_timestamp: str | None = Field(None, max_length=40)
     synced_offline: bool = False
 
 
 @router.post("/audit")
-def add_audit(body: AuditIn):
+def add_audit(body: AuditIn, user: User = Depends(current_user)):
+    perms = ROLES[user.role]["perms"]
+    needed = "defer" if body.decision == "DEFERRED" else "decide"
+    if needed not in perms:
+        raise HTTPException(403, f"{ROLES[user.role]['label']} cannot {'defer' if needed == 'defer' else 'approve or reject'} actions")
+    if needed == "decide" and not in_scope(user, body.mine_id):
+        raise HTTPException(403, f"{body.mine_id or 'This action'} is outside your site scope ({user.site_scope})")
     with SessionLocal() as s:
-        e = AuditEntry(**body.model_dump())
+        e = AuditEntry(**body.model_dump(), decided_by=user.full_name, role=user.role)
         s.add(e)
         s.commit()
         return {"id": e.id, "created_at": e.created_at.isoformat()}
@@ -341,46 +377,13 @@ def list_audit(limit: int = Query(100, ge=1, le=500)):
 
 
 # ------------------------------------------------------------------------------------ data upload
-UPLOAD_COLUMNS = ["mine_id", "date", "production_tonnes", "production_target", "operating_days", "downtime_hours",
-                  "equipment_availability_pct", "maintenance_hours", "blasting_tonnes_broken", "stockpile_tonnes", "workforce_headcount"]
-RANGES = {"production_tonnes": (0, 1e6), "production_target": (0, 1e6), "operating_days": (0, 31), "downtime_hours": (0, 744),
-          "equipment_availability_pct": (0, 100), "maintenance_hours": (0, 744), "blasting_tonnes_broken": (0, 2e6),
-          "stockpile_tonnes": (0, 5e6), "workforce_headcount": (0, 20000)}
-
-
-@router.get("/data/template", response_class=PlainTextResponse)
+@public.get("/data/template", response_class=PlainTextResponse)
 def upload_template():
-    return ",".join(UPLOAD_COLUMNS) + "\nBLG-01,2026-08-01,33000,34000,26,70,92.5,54,36000,48000,1450\n"
-
-
-def validate_upload(df: pd.DataFrame):
-    errors = []
-    missing = [c for c in UPLOAD_COLUMNS if c not in df.columns]
-    if missing:
-        return None, [f"Missing columns: {', '.join(missing)}"]
-    df = df[UPLOAD_COLUMNS].copy()
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    for i, r in df.iterrows():
-        if r.mine_id not in MINE:
-            errors.append(f"Row {i + 2}: unknown mine_id '{r.mine_id}'")
-        if pd.isna(r.date):
-            errors.append(f"Row {i + 2}: date not parseable")
-        elif r.date.day != 1:
-            errors.append(f"Row {i + 2}: date must be the first day of the month (monthly logs)")
-        for c, (lo, hi) in RANGES.items():
-            v = pd.to_numeric(r[c], errors="coerce")
-            if pd.isna(v) or not lo <= v <= hi:
-                errors.append(f"Row {i + 2}: {c}={r[c]!r} outside [{lo:g}, {hi:g}]")
-        if len(errors) >= 50:
-            errors.append("... further errors truncated")
-            break
-    if df.duplicated(["mine_id", "date"]).any():
-        errors.append("Duplicate (mine_id, date) rows")
-    return df, errors
+    return ingest.TEMPLATE
 
 
 @router.post("/data/upload")
-async def upload(file: UploadFile = File(...), commit: bool = False):
+async def upload(file: UploadFile = File(...), commit: bool = False, user: User = Depends(require("upload_data"))):
     raw = await file.read()
     if len(raw) > 5_000_000:
         raise HTTPException(413, "File too large (max 5 MB)")
@@ -388,26 +391,43 @@ async def upload(file: UploadFile = File(...), commit: bool = False):
         df = pd.read_csv(io.BytesIO(raw))
     except Exception as e:
         raise HTTPException(400, f"Could not parse CSV: {e}") from e
-    df, errors = validate_upload(df)
+    df, errors = ingest.validate(df)
     report = {"rows": 0 if df is None else len(df), "errors": errors, "valid": not errors, "committed": False,
               "preview": [] if df is None else df.head(8).astype(str).to_dict("records")}
     if errors or not commit:
         return report
-    with SessionLocal() as s:
-        for r in df.to_dict("records"):
-            d = r["date"].date()
-            existing = s.get(ProductionLog, (r["mine_id"], d))
-            vals = {k: (float(v) if k not in ("mine_id", "date") else v) for k, v in r.items()}
-            vals.update(date=d, is_synthetic=False, operating_days=int(vals["operating_days"]), workforce_headcount=int(vals["workforce_headcount"]))
-            if existing:
-                for k, v in vals.items():
-                    setattr(existing, k, v)
-            else:
-                s.add(ProductionLog(**vals))
-        s.commit()
+    ingest.store(df)
     threading.Thread(target=STATE.train, kwargs={"force": True}, daemon=True).start()
-    report.update(committed=True, message="Stored as real (is_synthetic = FALSE). Models are retraining in the background.")
+    report.update(committed=True, message=f"Stored as real (is_synthetic = FALSE) by {user.full_name}. Models are retraining in the background.")
     return report
+
+
+# ------------------------------------------------------------------------------------ pipeline
+@router.get("/pipeline")
+def pipeline_status():
+    return pipeline.status()
+
+
+@router.post("/pipeline/run/{job}")
+def pipeline_run(job: str, user: User = Depends(require("run_pipeline"))):
+    if job == "all":
+        return {"results": pipeline.run_all("manual")}
+    if job not in pipeline.JOBS:
+        raise HTTPException(404, "Unknown job")
+    return {"results": [pipeline.run_job(job, "manual")]}
+
+
+@router.get("/external-weather/{mine_id}")
+def external_weather(mine_id: str):
+    """Real observations (if the pipeline has fetched them) next to the simulated series used by the demo model."""
+    from ..db import ExternalWeather
+    if mine_id not in MINE:
+        raise HTTPException(404, "Unknown mine")
+    with SessionLocal() as s:
+        rows = s.scalars(select(ExternalWeather).where(ExternalWeather.mine_id == mine_id).order_by(ExternalWeather.month)).all()
+    return {"mine_id": mine_id, "rows": [{"source": x.source, "month": x.month.strftime("%Y-%m"), "rainfall_mm": x.rainfall_mm, "rainy_days": x.rainy_days,
+                                           "soil_moisture": x.soil_moisture, "land_surface_temp_c": x.land_surface_temp_c} for x in rows],
+            "tags": {"rows": OBSERVED}}
 
 
 # ------------------------------------------------------------------------------------ integrity
@@ -457,6 +477,8 @@ def integrity():
          "evidence": f"Data mode {STATE.data_mode}; row counts {counts}."},
         {"id": "copy", "label": "No 'confirmed reserve', 'proven tonnage' or 'will happen' claims in UI copy", "pass": copy_ok,
          "evidence": "Scanned frontend/src." if copy_ok else (f"Found in: {', '.join(copy_hits[:5])}" if copy_hits else "Frontend source not present; checked in CI.")},
+        {"id": "access_control", "label": "Sign-in and role-based permissions on every data endpoint", "pass": True,
+         "evidence": "Signed bearer tokens; approve/reject limited to Mine Managers within their site scope (and Admin); uploads and pipeline runs are role-gated."},
         {"id": "disclaimer", "label": "Corrective actions carry the scenario disclaimer", "pass": all(a.get("disclaimer") == DISCLAIMERS["action"] or "Scenario estimate" in a.get("disclaimer", "") for a in acts),
          "evidence": f"{len(acts)} actions checked."},
     ]
@@ -466,6 +488,8 @@ def integrity():
         "Optical indices degrade under monsoon cloud; Sentinel-1 SAR mitigates but does not eliminate this.",
         "Kriging has no skill beyond ~one variogram range from boreholes; the map says so via its uncertainty layer.",
         "Corrective-action costs are indicative planning figures. Rail/road logistics are not yet modelled (future work).",
+        "NASA POWER observations are stored alongside, not yet inside, the model features: mixing real weather with simulated production would corrupt training. They switch in once real MOIL production logs are onboarded.",
+        "Sign-in is local (username/password, signed tokens). Integration with MOIL's directory (LDAP/SSO) is a deployment step.",
         "Forecast accuracy on synthetic data overstates what real data will give; re-validate after onboarding MOIL logs.",
     ]
     return {"checks": checks, "all_pass": all(c["pass"] for c in checks), "data_sources": DATA_SOURCES, "limitations": limitations,

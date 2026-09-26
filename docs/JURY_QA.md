@@ -23,3 +23,6 @@ A planner needs the chance of meeting target, not a point. P(production ≥ targ
 
 **"What if the model can't explain a shortfall?"**
 It says "Insufficient evidence to determine the cause" rather than inventing a breakdown.
+
+**"Is this production-ready?"**
+The deployment path is built and tested, but the system has not been validated on real data. What exists: role-based sign-in (Mine Managers approve only for their own cluster), a scheduled pipeline (built-in scheduler or cron) that pulls real NASA POWER weather per mine and loads MOIL CSV exports from a drop folder, and a logged record of every pipeline run. What is still needed is an MoU for MOIL's production and drilling records, re-validation on those records, and SSO integration.

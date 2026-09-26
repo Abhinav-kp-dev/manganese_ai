@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { del, get, keys, set } from "idb-keyval";
+import { getToken } from "./auth.jsx";
 
 const BASE = import.meta.env.VITE_API_BASE || "";
 
 export async function api(path, opts = {}) {
-  const res = await fetch(BASE + path, {
-    ...opts,
-    headers: opts.body && !(opts.body instanceof FormData) ? { "Content-Type": "application/json", ...(opts.headers || {}) } : opts.headers,
-  });
+  const token = getToken();
+  const headers = { ...(opts.body && !(opts.body instanceof FormData) ? { "Content-Type": "application/json" } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(opts.headers || {}) };
+  const res = await fetch(BASE + path, { ...opts, headers });
+  if (res.status === 401 && token && !path.startsWith("/api/auth/login")) window.dispatchEvent(new Event("mh-logout"));
   if (!res.ok) {
     const err = new Error(`${res.status}`);
     err.status = res.status;
@@ -47,7 +48,8 @@ export function useApi(path, deps = []) {
 export async function submitDecision(entry) {
   const payload = { ...entry, client_timestamp: new Date().toISOString() };
   if (navigator.onLine) {
-    try { return { synced: true, ...(await api("/api/audit", { method: "POST", body: JSON.stringify(payload) })) }; } catch { /* fall through to queue */ }
+    try { return { synced: true, ...(await api("/api/audit", { method: "POST", body: JSON.stringify(payload) })) }; }
+    catch (e) { if (e.status && e.status !== 503) return { synced: false, error: e.detail || `Error ${e.status}` }; }
   }
   await set(`queue:${Date.now()}:${Math.random().toString(36).slice(2)}`, { ...payload, synced_offline: true });
   window.dispatchEvent(new Event("mh-queue"));
@@ -65,7 +67,10 @@ export async function flushQueue() {
       await api("/api/audit", { method: "POST", body: JSON.stringify(await get(k)) });
       await del(k);
       sent++;
-    } catch { break; }
+    } catch (e) {
+      if (e.status === 403 || e.status === 422) { await del(k); continue; } // permanently refused: drop
+      break;
+    }
   }
   window.dispatchEvent(new Event("mh-queue"));
   return sent;

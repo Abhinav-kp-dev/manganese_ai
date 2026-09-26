@@ -27,12 +27,42 @@ make install                         # pip + npm
 make run                             # builds the dashboard, serves API + UI on http://localhost:8000 (API docs at /docs)
 # or hot-reload:  make api  (port 8000)  +  make web  (port 5173, proxies /api)
 
-make test                            # 18 backend tests incl. scientific guardrails
+make test                            # 25 backend tests incl. scientific guardrails and role checks
 ```
 
 On first start the server generates the (deterministic) demo dataset, seeds the database and trains every model. This takes about 30 s and is cached after that. `/api/health` reports `training` until it is ready.
 
 The default database is SQLite (no setup, works on a site laptop). For PostgreSQL/PostGIS, run `db/postgis_schema.sql` on the server and set `DATABASE_URL=postgresql+psycopg2://<user>:<password>@<host>:5432/manganese_horizon`.
+
+## Sign-in and roles
+
+Every data endpoint needs a signed-in user. Pick a role on the sign-in screen (demo password `demo123`):
+
+| Role | Demo account(s) | Can |
+|---|---|---|
+| Administrator | `admin` | everything, incl. running the data pipeline |
+| Mine Manager | `manager.balaghat`, `manager.bhandara`, `manager.nagpur` | approve / reject / defer actions **for mines in their own cluster only** |
+| Mine Planning Engineer | `planner` | defer actions, upload MOIL data |
+| Exploration Geologist | `geologist` | upload data, view everything |
+| Viewer | `viewer` | read-only |
+
+Decisions are recorded under the signed-in account and role (no free-text names). For a real deployment set `MH_SECRET`, change `MH_DEMO_PASSWORD` or disable demo accounts with `MH_DEMO_ACCOUNTS=0`.
+
+## Data pipeline (real data)
+
+| Job | What it does |
+|---|---|
+| `nasa_power` | Pulls **real** daily rainfall, soil wetness and surface temperature for each mine from NASA POWER (free, no API key) and stores monthly values in `external_weather` (`is_synthetic = FALSE`). |
+| `inbox` | Validates and loads MOIL CSV exports dropped into `backend/var/inbox/`; bad files go to `rejected/` with an error report. |
+| `retrain` | Retrains the models when the data changed. |
+
+It runs inside the server every `MH_PIPELINE_INTERVAL_MIN` minutes (default 360; `0` turns it off), can be triggered by an Administrator from the **Data & Integrity** page, or from cron:
+
+```bash
+0 */6 * * *  cd /path/to/manganese_ai/backend && python -m app.pipeline all
+```
+
+Every run is logged in `pipeline_runs` and shown on the dashboard. The NASA POWER series is kept next to, not inside, the model features until real MOIL production logs arrive, because mixing real weather with simulated production would corrupt training.
 
 ## Repository layout
 

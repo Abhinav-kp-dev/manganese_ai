@@ -7,8 +7,12 @@ import Actions from "./pages/Actions.jsx";
 import Scenarios from "./pages/Scenarios.jsx";
 import Integrity from "./pages/Integrity.jsx";
 import Report from "./pages/Report.jsx";
+import Login from "./pages/Login.jsx";
+import { useAuth } from "./auth.jsx";
 
 export default function App() {
+  const { user } = useAuth();
+  if (!user) return <Login />;
   return (
     <Routes>
       <Route element={<Layout />}>

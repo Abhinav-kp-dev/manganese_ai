@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, Clock, X } from "lucide-react";
 import { api, fmt, monthLabel, pct, submitDecision, useApi } from "../api.js";
 import { useI18n } from "../i18n.jsx";
+import { useAuth } from "../auth.jsx";
 import { Card, Note, PageHeader, PriorityBadge, Stat, StaleNote, Tag, useLoaded } from "../components/ui.jsx";
 
 export default function Actions() {
@@ -10,7 +11,7 @@ export default function Actions() {
   const q = useApi(`/api/actions?horizon=${h}`);
   const mines = useApi("/api/mines");
   const audit = useApi("/api/audit");
-  const [who, setWho] = useState(() => { try { return localStorage.getItem("mh-who") || ""; } catch { return ""; } });
+  const { user } = useAuth();
   const gate = useLoaded(q);
   if (gate) return gate;
   const r = q.data;
@@ -28,11 +29,7 @@ export default function Actions() {
         <Stat label={t("unmitigated")} value={`${fmt(r.summary.unmitigated)} t`} tag="SCENARIO" tone={r.summary.unmitigated > 0 ? "#f43f5e" : undefined} />
         <Stat label="Indicative plan cost" value={`₹${fmt((r.summary.objective_cost_inr || 0) / 1e5, 1)} lakh`} sub="Indicative Rs/t planning costs" tag="SCENARIO" />
       </div>
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-ink-300">{t("decided_by")}:</span>
-        <input className="input w-64" value={who} placeholder="e.g. Mine Manager, Balaghat" onChange={(e) => { setWho(e.target.value); try { localStorage.setItem("mh-who", e.target.value); } catch { /* ignore */ } }} />
-        <span className="text-xs text-ink-400">Recorded with every approve / defer / reject decision.</span>
-      </div>
+      <div className="text-sm text-ink-300">Signed in as <b>{user.full_name}</b> ({user.role_label}{user.site_scope !== "ALL" ? `, scope ${user.site_scope}` : ""}). Decisions are recorded under this account.</div>
       {r.formulation && <div className="rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 font-mono text-[11px] text-ink-300">LP ({r.solver}): {r.formulation}</div>}
 
       <div id="action-plan" className="space-y-4">
@@ -41,7 +38,7 @@ export default function Actions() {
           <Card key={b.mine_id} title={`${b.mine_name} — deficit ${fmt(b.deficit_p50)} t`} tag="SCENARIO"
             right={<div className="flex items-center gap-2 text-xs text-ink-400">P(target) {pct(b.achievement_probability)} <PriorityBadge p={b.priority} /></div>}>
             <div className="space-y-2">
-              {b.actions.map((a) => <ActionRow key={a.rank} a={a} mine={b.mine_id} month={r.month} who={who} onDone={audit.reload} />)}
+              {b.actions.map((a) => <ActionRow key={a.rank} a={a} mine={b.mine_id} month={r.month} onDone={audit.reload} />)}
             </div>
             <div className="mt-3 grid gap-2 md:grid-cols-2">
               <div className="text-xs text-ink-400">Covered {fmt(b.mitigated)} t · uncovered <span className={b.unmitigated > 0 ? "text-rose-300" : ""}>{fmt(b.unmitigated)} t</span> · cost ₹{fmt(b.cost_inr / 1e5, 2)} lakh</div>
@@ -64,13 +61,17 @@ export default function Actions() {
   );
 }
 
-function ActionRow({ a, mine, month, who, onDone }) {
+const MINE_CLUSTER = { "BLG-01": "BLG", "BLG-02": "BLG", "BLG-03": "BLG", "BLG-04": "BLG", "BHD-01": "BHD", "BHD-02": "BHD", "NGP-01": "NGP", "NGP-02": "NGP", "NGP-03": "NGP", "NGP-04": "NGP" };
+
+function ActionRow({ a, mine, month, onDone }) {
   const { t } = useI18n();
+  const { can, inScope } = useAuth();
   const [status, setStatus] = useState(null);
+  const canDecide = can("decide") && inScope({ mine_id: mine, cluster_id: MINE_CLUSTER[mine] });
+  const whyNot = !can("decide") ? "Your role cannot approve or reject" : "Outside your site scope";
   const decide = async (decision) => {
-    if (!who.trim()) return setStatus("name");
-    const res = await submitDecision({ recommendation_key: `${month}:${mine}:${a.lever}:${a.rank}`, action_title: a.action_title, decision, decided_by: who.trim(), note: a.reason });
-    setStatus(res.synced ? decision : `${decision} (queued offline)`);
+    const res = await submitDecision({ recommendation_key: `${month}:${mine}:${a.lever}:${a.rank}`, action_title: a.action_title, mine_id: mine, decision, note: a.reason });
+    setStatus(res.error ? `Refused: ${res.error}` : res.synced ? `Recorded: ${decision}` : `Recorded: ${decision} (queued offline)`);
     onDone?.();
   };
   return (
@@ -94,12 +95,12 @@ function ActionRow({ a, mine, month, who, onDone }) {
       <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-ink-700 pt-2">
         <span className="text-[11px] italic text-amber-200/80">{a.disclaimer}</span>
         <div className="ml-auto flex items-center gap-2">
-          <button className="btn-ghost py-1 text-xs" onClick={() => decide("APPROVED")}><Check className="h-3 w-3" />{t("approve")}</button>
-          <button className="btn-ghost py-1 text-xs" onClick={() => decide("DEFERRED")}><Clock className="h-3 w-3" />{t("defer")}</button>
-          <button className="btn-ghost py-1 text-xs" onClick={() => decide("REJECTED")}><X className="h-3 w-3" />{t("reject")}</button>
+          <button className="btn-ghost py-1 text-xs" disabled={!canDecide} title={canDecide ? "" : whyNot} onClick={() => decide("APPROVED")}><Check className="h-3 w-3" />{t("approve")}</button>
+          <button className="btn-ghost py-1 text-xs" disabled={!can("defer")} title={can("defer") ? "" : "Your role cannot defer"} onClick={() => decide("DEFERRED")}><Clock className="h-3 w-3" />{t("defer")}</button>
+          <button className="btn-ghost py-1 text-xs" disabled={!canDecide} title={canDecide ? "" : whyNot} onClick={() => decide("REJECTED")}><X className="h-3 w-3" />{t("reject")}</button>
         </div>
       </div>
-      {status && <div className="mt-1 text-right text-xs text-mn-300">{status === "name" ? "Enter your name / role at the top of the page first." : `Recorded: ${status}`}</div>}
+      {status && <div className="mt-1 text-right text-xs text-mn-300">{status}</div>}
     </div>
   );
 }
@@ -146,8 +147,8 @@ function AuditLog({ q }) {
       {rows.length === 0 ? <p className="text-sm text-ink-400">No decisions recorded yet. Decisions made offline are queued on this device and synced automatically.</p> : (
         <div className="max-h-72 overflow-auto">
           <table className="data text-xs">
-            <thead><tr><th>When (server)</th><th>Decision</th><th>By</th><th>Action</th><th>Offline?</th></tr></thead>
-            <tbody>{rows.map((e) => <tr key={e.id}><td className="font-mono">{e.created_at.slice(0, 19).replace("T", " ")}</td><td>{e.decision}</td><td>{e.decided_by}</td><td>{e.action_title}</td><td>{e.synced_offline ? "queued" : ""}</td></tr>)}</tbody>
+            <thead><tr><th>When (server)</th><th>Decision</th><th>By</th><th>Role</th><th>Mine</th><th>Action</th><th>Offline?</th></tr></thead>
+            <tbody>{rows.map((e) => <tr key={e.id}><td className="font-mono">{e.created_at.slice(0, 19).replace("T", " ")}</td><td>{e.decision}</td><td>{e.decided_by}</td><td>{e.role || ""}</td><td>{e.mine_id || ""}</td><td>{e.action_title}</td><td>{e.synced_offline ? "queued" : ""}</td></tr>)}</tbody>
           </table>
         </div>
       )}
