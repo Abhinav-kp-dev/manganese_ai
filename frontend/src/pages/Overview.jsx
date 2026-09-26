@@ -5,8 +5,8 @@ import { fmt, monthLabel, pct, useApi } from "../api.js";
 import { useI18n } from "../i18n.jsx";
 import { Card, Note, PageHeader, PriorityBadge, RISK_COLOR, RiskBadge, Stat, StaleNote, Tag, useLoaded } from "../components/ui.jsx";
 
-export const TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-export const TILE_ATTR = '&copy; OpenStreetMap contributors &copy; CARTO';
+export const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+export const TILE_ATTR = '&copy; OpenStreetMap contributors';
 
 export default function Overview() {
   const { t } = useI18n();
