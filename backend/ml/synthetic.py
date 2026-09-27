@@ -169,6 +169,13 @@ def generate_boreholes(rng, grid: pd.DataFrame):
 # --------------------------------------------------------------------------- production
 MONSOON_MONTHS = {6, 7, 8, 9}
 CLUSTER_RAIN_SCALE = {"NGP": 1.0, "BHD": 1.12, "BLG": 1.3}
+# Monthly rainfall outlooks (IMD extended-range / seasonal) have modest skill. The simulated
+# outlook is the station climatology nudged towards the realised anomaly by RAIN_FC_SKILL
+# (0 = climatology only, 1 = perfect foresight) with multiplicative error of RAIN_FC_NOISE
+# (log-sd). The earlier generator used realised rainfall x 28% noise, i.e. near-perfect foresight.
+RAIN_FC_SKILL = 0.3
+RAIN_FC_NOISE = 0.45
+_LEGACY_FC_NOISE = 0.28  # the draw is kept at this scale so every later random number is unchanged
 HISTORY_START, HISTORY_END = "2018-04-01", "2026-08-31"
 PLAN_MONTHS = ["2026-09-01", "2026-10-01", "2026-11-01"]
 
@@ -192,6 +199,23 @@ def _daily_weather(rng, dates: pd.DatetimeIndex, scale: float, year_strength: di
     return pd.DataFrame({"date": dates, "rain": amount, "soil": soil, "lst": lst, "ndvi": ndvi})
 
 
+def _monthly_climatology(wx: pd.DataFrame) -> dict:
+    """Calendar-month normals (total rain, wet days) from complete historical years only."""
+    d = wx.assign(year=wx.date.dt.year, month=wx.date.dt.month, wet=(wx.rain > 2.5).astype(int))
+    d = d[d.year < pd.Timestamp(HISTORY_END).year]  # a normal is computed from past years, never the forecast year
+    m = d.groupby(["year", "month"]).agg(rain=("rain", "sum"), wet=("wet", "sum")).groupby("month").mean()
+    return {int(k): (float(r.rain), float(r.wet)) for k, r in m.iterrows()}
+
+
+def outlook(actual: float, normal: float, noise: float, offset: float, skill: float = RAIN_FC_SKILL) -> float:
+    """Ex-ante outlook: climatology x (realised anomaly ** skill) x noise.
+
+    ``offset`` keeps dry-season ratios finite (a 0 mm month against a 2 mm normal).
+    """
+    ratio = (actual + offset) / (normal + offset)
+    return max(0.0, (normal + offset) * ratio ** skill * noise - offset)
+
+
 def generate_production(rng: np.random.Generator):
     """Daily physics-inspired simulation per mine, aggregated to monthly logs and ex-ante plans."""
     dates = pd.date_range(HISTORY_START, pd.Timestamp(PLAN_MONTHS[-1]) + pd.offsets.MonthEnd(0), freq="D")
@@ -200,6 +224,7 @@ def generate_production(rng: np.random.Generator):
     year_strength[2026] = 1.15  # an above-normal 2026 monsoon drives the demo's September risk
 
     weather = {c: _daily_weather(rng, dates, s, year_strength) for c, s in CLUSTER_RAIN_SCALE.items()}
+    climatology = {c: _monthly_climatology(w) for c, w in weather.items()}
     logs, plans, wx_rows = [], [], []
 
     for mine in MINES:
@@ -276,9 +301,10 @@ def generate_production(rng: np.random.Generator):
             first = g.index[0]
             wet_days = int((g.rain > 2.5).sum())
             rain_total = float(g.rain.sum())
-            fc_noise = rng.lognormal(0, 0.28)
-            rain_fc = rain_total * fc_noise
-            rainy_fc = int(np.clip(round(wet_days * fc_noise ** 0.5 + rng.normal(0, 1.5)), 0, dim))
+            fc_noise = rng.lognormal(0, _LEGACY_FC_NOISE) ** (RAIN_FC_NOISE / _LEGACY_FC_NOISE)
+            clim_rain, clim_wet = climatology[mine["cluster_id"]][p.month]
+            rain_fc = outlook(rain_total, clim_rain, fc_noise, offset=5.0)
+            rainy_fc = int(np.clip(round(outlook(wet_days, clim_wet, fc_noise ** 0.5, offset=1.0) + rng.normal(0, 1.5)), 0, dim))
             planned_days = int(dim - sum(1 for d in pd.date_range(p.start_time, p.end_time, freq="D") if d.dayofweek == 6))
             blast_window = planned_days - int(g.licence_gap.sum()) - (0 if ug else int(round(rainy_fc * 0.55)))
             yrs = (p - growth_start).n / 12.0

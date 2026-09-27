@@ -23,7 +23,7 @@ from .db import (DATA_DIR, Borehole, Forecast, Mine, MinePlan, Occurrence, Produ
                  ReserveConfidenceCell, SessionLocal, WeatherFeature, init_db)
 
 log = logging.getLogger("manganese_horizon")
-MODEL_VERSION_PREFIX = "mh-1.0"
+MODEL_VERSION_PREFIX = "mh-1.1"  # bump whenever features or training change: it keys the artefact cache
 MIN_REAL_ROWS_FOR_REAL_ONLY = 240  # ~2 years x 10 mines before synthetic rows are dropped from training
 GRID_FILE = DATA_DIR / "geology_grid.pkl"
 
@@ -96,7 +96,7 @@ class AppState:
             t0 = time.time()
             frames = self.load_frames()
             fp = self.fingerprint(frames)
-            cache = DATA_DIR / f"artefacts_{fp}.joblib"
+            cache = DATA_DIR / f"artefacts_{MODEL_VERSION_PREFIX}_{fp}.joblib"
             if cache.exists() and not force:
                 art = joblib.load(cache)
             else:

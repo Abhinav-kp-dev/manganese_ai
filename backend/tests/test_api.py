@@ -53,6 +53,13 @@ def test_scenarios_move_in_physical_direction(client):
     assert bad < base < good
 
 
+def test_equipment_scenario_moves_every_horizon(client):
+    for h in (1, 2, 3):
+        base = client.post("/api/scenarios/run", json={"scenario_id": "baseline", "horizon": h}).json()["totals"]["baseline_p50"]
+        down = client.post("/api/scenarios/run", json={"scenario_id": "equipment_downtime", "horizon": h}).json()["totals"]["scenario_p50"]
+        assert down < base, f"horizon {h}: equipment breakdown should lower the forecast"
+
+
 def test_integrity_checks_pass(client):
     j = client.get("/api/integrity").json()
     failing = [c for c in j["checks"] if c["pass"] is False]

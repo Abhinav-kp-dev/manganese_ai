@@ -2,8 +2,9 @@
 
 For a forecast of month t issued at the end of month t-h, only information available at
 issue time is used: production history up to t-h, satellite observations up to t-h, and the
-ex-ante plan for month t (planned days, maintenance, fleet health, blasting window, IMD
-extended-range rainfall forecast). Realised downtime/rainfall of month t are never features.
+ex-ante plan for month t (planned days, maintenance, blasting window, IMD extended-range
+rainfall forecast) and the latest fleet-health reading (month t-h+1). Realised downtime/rainfall
+of month t are never features.
 """
 from __future__ import annotations
 
@@ -89,6 +90,10 @@ def make_features(panel: pd.DataFrame, h: int) -> pd.DataFrame:
     df["util_roll3"] = g["util"].transform(lambda x: x.shift(h).rolling(3, min_periods=2).mean())
     df["util_roll12"] = g["util"].transform(lambda x: x.shift(h).rolling(12, min_periods=6).mean())
     df["util_std3"] = g["util"].transform(lambda x: x.shift(h).rolling(3, min_periods=2).std())
+    # Fleet health is logged on the first day of each month, so at the end of month t-h the latest
+    # known value is the one for month t-h+1. For h = 1 that is the target month itself; for h > 1
+    # using the target month's value would be look-ahead.
+    df["fleet_health_index"] = s("fleet_health_index", h - 1)
     df["availability_lag"] = s("equipment_availability_pct", h)
     df["downtime_ratio_lag"] = s("downtime_ratio", h)
     df["stockpile_days_lag"] = s("stockpile_days", h)
