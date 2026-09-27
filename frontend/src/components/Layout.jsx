@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Activity, CloudOff, LogOut, FileText, Gauge, Layers, Menu, PlayCircle, ShieldCheck, SlidersHorizontal, Wrench, X } from "lucide-react";
+import { Activity, CloudOff, LogOut, FileText, Gauge, Layers, Menu, Moon, PlayCircle, ShieldCheck, SlidersHorizontal, Sun, Wrench, X } from "lucide-react";
 import { flushQueue, pendingCount, useApi } from "../api.js";
 import { LANGS, useI18n } from "../i18n.jsx";
 import { useAuth } from "../auth.jsx";
+import { useTheme } from "../theme.jsx";
 
 const NAV = [
   { to: "/", key: "nav_overview", icon: Gauge },
@@ -34,6 +35,7 @@ function useOnline() {
 
 export default function Layout() {
   const { t, lang, setLang } = useI18n();
+  const { theme, toggleTheme } = useTheme();
   const meta = useApi("/api/meta");
   const { online, pending } = useOnline();
   const { user, signOut } = useAuth();
@@ -77,12 +79,17 @@ export default function Layout() {
           </div>
           <div className="mt-4 space-y-3 px-5 text-xs text-ink-400">
             <button className="btn-primary w-full justify-center" onClick={() => setTour(true)}><PlayCircle className="h-4 w-4" /> {t("guided_demo")}</button>
-            <label className="block">
-              <span className="mb-1 block">{t("language")}</span>
-              <select className="input w-full" value={lang} onChange={(e) => setLang(e.target.value)}>
-                {LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
-              </select>
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block flex-1">
+                <span className="mb-1 block">{t("language")}</span>
+                <select className="input w-full" value={lang} onChange={(e) => setLang(e.target.value)}>
+                  {LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
+                </select>
+              </label>
+              <button className="btn-ghost ml-2 mt-4 shrink-0 px-2" onClick={toggleTheme} aria-label="Toggle color theme" title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
+            </div>
             <div className="flex items-center gap-2">
               {online ? <span className="h-2 w-2 rounded-full bg-emerald-400" /> : <CloudOff className="h-3.5 w-3.5 text-amber-400" />}
               {online ? t("online") : t("offline")}
@@ -100,7 +107,8 @@ export default function Layout() {
         <main className="min-w-0 flex-1 px-4 pb-16 pt-4 md:px-8">
           <div className="no-print mb-3 flex items-center gap-3 md:hidden">
             <button className="btn-ghost" onClick={() => setOpen(!open)} aria-label="Menu">{open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}</button>
-            <span className="font-semibold">{t("appName")}</span>
+            <span className="flex-1 font-semibold">{t("appName")}</span>
+            <button className="btn-ghost px-2" onClick={toggleTheme} aria-label="Toggle color theme">{theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button>
           </div>
           <Outlet context={{ meta: meta.data }} />
         </main>

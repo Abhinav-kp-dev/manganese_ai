@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api, fmt, monthLabel, pct, useApi } from "../api.js";
 import { useI18n } from "../i18n.jsx";
+import { chartColors, useTheme } from "../theme.jsx";
 import { Card, Note, PageHeader, PriorityBadge, RiskBadge, Stat, Tag } from "../components/ui.jsx";
 
 const SLIDERS = [
@@ -16,6 +17,8 @@ const DEFAULTS = { rainfall_multiplier: 1, rainy_days_delta: 0, fleet_health_del
 
 export default function Scenarios() {
   const { t } = useI18n();
+  const { theme } = useTheme();
+  const C = chartColors(theme);
   const list = useApi("/api/scenarios");
   const mines = useApi("/api/mines");
   const [sid, setSid] = useState("bad_weather");
@@ -81,15 +84,15 @@ export default function Scenarios() {
               <Card title="Median production by mine: current plan vs scenario" tag="SCENARIO">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={chart} margin={{ top: 4, right: 8, left: 0, bottom: 40 }}>
-                    <CartesianGrid stroke="#222c3f" vertical={false} />
-                    <XAxis dataKey="name" angle={-35} textAnchor="end" interval={0} stroke="#8b96ad" fontSize={11} />
-                    <YAxis stroke="#8b96ad" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={36} />
-                    <Tooltip contentStyle={{ background: "#18202f", border: "1px solid #34405a" }} formatter={(v) => `${fmt(v)} t`} />
+                    <CartesianGrid stroke={C.grid} vertical={false} />
+                    <XAxis dataKey="name" angle={-35} textAnchor="end" interval={0} stroke={C.axis} fontSize={11} />
+                    <YAxis stroke={C.axis} fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={36} />
+                    <Tooltip contentStyle={{ background: C.tooltipBg, border: `1px solid ${C.tooltipBorder}` }} formatter={(v) => `${fmt(v)} t`} />
                     <Legend verticalAlign="top" height={24} wrapperStyle={{ fontSize: 11 }} />
                     <Bar dataKey="baseline" name="Current plan P50" fill="#475569" isAnimationActive={false} />
                     <Bar dataKey="scenario" name="Scenario P50" fill="#f59e0b" isAnimationActive={false} />
                     <Bar dataKey="target" name={sid === "target_realignment" ? "Realigned target" : "Target"} fill="#8b5cf6" fillOpacity={0.5} isAnimationActive={false} />
-                    <ReferenceLine y={0} stroke="#34405a" />
+                    <ReferenceLine y={0} stroke={C.base} />
                   </BarChart>
                 </ResponsiveContainer>
               </Card>

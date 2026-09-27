@@ -8,6 +8,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+Devanagari:wght@400;600&display=swap" rel="stylesheet" />
     <title>Manganese Horizon</title>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem("mh-theme");
+          var theme = saved === "light" || saved === "dark" ? saved : (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+          document.documentElement.classList.add(theme);
+        } catch (e) { document.documentElement.classList.add("dark"); }
+      })();
+    </script>
   </head>
   <body class="bg-ink-950 text-ink-100">
     <div id="root"></div>
