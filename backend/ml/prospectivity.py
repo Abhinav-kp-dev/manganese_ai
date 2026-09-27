@@ -19,6 +19,7 @@ from sklearn.model_selection import StratifiedKFold
 
 from .geostats import OrdinaryKriging, assign_block_folds, fit_variogram, kriging_cv, spatial_blocks
 from .synthetic import COVER_TYPES, _km_xy
+from .tonnage import add_tonnage, compare_probability_models, indicator_kriging
 
 SURFACE_FEATURES = [
     "ferric_ratio_b4_b2", "clay_ratio_b11_b12", "ndvi", "ndwi", "sar_vv_db", "sar_vh_db",
@@ -65,11 +66,12 @@ def build_training_set(grid, occurrences, rng, ratio=5):
     return cells, y
 
 
-def train_surface_model(grid, occurrences, seed=26009):
-    assert not FORBIDDEN_FEATURES & set(SURFACE_FEATURES), "leakage feature in surface model"
+def train_surface_model(grid, occurrences, seed=26009, features=SURFACE_FEATURES, labels=None):
+    assert not FORBIDDEN_FEATURES & set(features), "leakage feature in surface model"
+    labels = labels or FEATURE_LABELS
     rng = np.random.default_rng(seed)
     cells, y = build_training_set(grid, occurrences, rng)
-    X = grid.loc[cells, SURFACE_FEATURES].values
+    X = grid.loc[cells, features].values
     spw = (y == 0).sum() / max((y == 1).sum(), 1)
 
     folds = assign_block_folds(spatial_blocks(grid.x_km.values[cells], grid.y_km.values[cells], BLOCK_KM), 5, seed)
@@ -97,7 +99,7 @@ def train_surface_model(grid, occurrences, seed=26009):
     gain = final.get_booster().get_score(importance_type="gain")
     total = sum(gain.values()) or 1.0
     importance = sorted(
-        [{"feature": f, "label": FEATURE_LABELS[f], "importance": float(gain.get(f"f{i}", gain.get(f, 0.0)) / total)} for i, f in enumerate(SURFACE_FEATURES)],
+        [{"feature": f, "label": labels.get(f, f), "importance": float(gain.get(f"f{i}", gain.get(f, 0.0)) / total)} for i, f in enumerate(features)],
         key=lambda d: -d["importance"])
     validation = {
         "method": "Spatially blocked 5-fold CV (~30 km blocks)",
@@ -137,6 +139,8 @@ def run_module1(data: dict) -> dict:
     grid["p_grade_above_cutoff"] = 1 - norm.cdf((CUTOFF_MN_PCT - mean) / np.maximum(sd, 1e-6))
     support = np.clip(1 - var / sill, 0, 1)
     grid["data_support"] = support
+    grid["p_grade_above_cutoff_ik"], ik_vario = indicator_kriging(bxy, z, CUTOFF_MN_PCT, grid[["x_km", "y_km"]].values)
+    prob_models = compare_probability_models(bxy, z, CUTOFF_MN_PCT, bx, by)
 
     final, fold_models, validation, importance = train_surface_model(grid, data["occurrences"])
     Xg = grid[SURFACE_FEATURES].values
@@ -167,11 +171,15 @@ def run_module1(data: dict) -> dict:
     }
 
     targets = select_drill_targets(grid, final, data)
+    thickness = add_tonnage(targets, grid, bh, _km_xy, CUTOFF_MN_PCT)
+    for t in targets:
+        t.pop("_cell", None)
     return {
         "grid": grid.drop(columns=["_latent", "_grade_true"]),
         "variogram": vario, "kriging_cv": kcv, "surface_validation": validation,
         "feature_importance": importance, "simulation_check": sim_check, "drill_targets": targets,
         "surface_model": final, "cutoff_mn_pct": CUTOFF_MN_PCT,
+        "probability_models": prob_models, "indicator_variogram": ik_vario, "thickness_variogram": thickness["variogram"],
     }
 
 
@@ -205,7 +213,7 @@ def select_drill_targets(grid, model, data, n=10, min_sep_km=6.0, lease_buffer_k
             "target_id": f"DT-{rank:02d}", "rank": rank, "latitude": round(float(row.latitude), 4),
             "longitude": round(float(row.longitude), 4), "confidence": round(float(row.confidence), 3),
             "uncertainty": round(float(row.uncertainty), 3), "value_of_information": round(float(row.voi), 3),
-            "zone": row.zone, "cover": row.cover_name, "reasons": reasons,
+            "zone": row.zone, "cover": row.cover_name, "reasons": reasons, "_cell": row.name,
         })
     return out
 

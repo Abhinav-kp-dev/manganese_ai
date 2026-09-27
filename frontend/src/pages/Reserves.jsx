@@ -28,6 +28,8 @@ const LAYERS = {
   uncertainty: { label: "Uncertainty", color: HEAT, norm: (v) => v, legend: ["low", "", "", "high"], tag: "MODEL_INFERENCE" },
   kriged_grade_pct: { label: "Kriged Mn grade (%)", color: GRADE, norm: (v) => (v - 10) / 35, legend: ["10%", "", "27%", "", "45%"], tag: "MODEL_INFERENCE" },
   kriging_sd_pct: { label: "Kriging std. dev. (%)", color: HEAT, norm: (v) => v / 10, legend: ["0", "", "5", "", "10+"], tag: "MODEL_INFERENCE" },
+  p_grade_above_cutoff: { label: "P(grade ≥ cut-off) · Gaussian kriging", color: GRADE, norm: (v) => v, legend: ["0", "", "0.5", "", "1"], tag: "MODEL_INFERENCE" },
+  p_grade_above_cutoff_ik: { label: "P(grade ≥ cut-off) · indicator kriging", color: GRADE, norm: (v) => v, legend: ["0", "", "0.5", "", "1"], tag: "MODEL_INFERENCE" },
   surface_prob: { label: "Satellite surface proxy", color: PURPLE, norm: (v) => v, legend: ["0", "", "0.5", "", "1"], tag: "MODEL_INFERENCE" },
   data_support: { label: "Borehole data support", color: GRADE, norm: (v) => v, legend: ["none", "", "strong"], tag: "MODEL_INFERENCE" },
   cover_type: { label: "Surface cover (masks satellite signal)", categorical: true, tag: "OBSERVED" },
@@ -165,6 +167,7 @@ function CellPanel({ cell }) {
       <div className="grid grid-cols-2 gap-2 text-sm">
         <Metric label="Kriged grade" v={`${s.kriged_grade_pct}% ±${s.kriging_sd_pct}`} />
         <Metric label="P(grade ≥ cut-off)" v={pct(s.p_grade_above_cutoff)} />
+        {s.p_grade_above_cutoff_ik !== undefined && <Metric label="Same, indicator kriging" v={pct(s.p_grade_above_cutoff_ik)} />}
         <Metric label="Borehole support" v={pct(s.data_support)} />
       </div>
       <h3 className="card-title mb-1 mt-4 flex items-center gap-2">Surface proxy <Tag kind="OBSERVED" /></h3>
@@ -217,6 +220,11 @@ function Validation({ v }) {
           </tbody>
         </table>
         <p className="mt-2 text-xs text-ink-400">{k.reading}</p>
+        {v.probability_models && (
+          <div className="mt-2 text-xs text-ink-300">
+            <b>P(grade ≥ cut-off), cross-validated Brier score</b> (lower is better): Gaussian kriging <span className="num">{v.probability_models.brier_gaussian_kriging.toFixed(3)}</span> · indicator kriging <span className="num">{v.probability_models.brier_indicator_kriging.toFixed(3)}</span> · base rate only <span className="num">{v.probability_models.brier_climatology.toFixed(3)}</span>
+          </div>
+        )}
         <h3 className="card-title mb-1 mt-3">Variogram (spherical fit, range {v.variogram.range_km.toFixed(1)} km)</h3>
         <VariogramChart variogram={v.variogram} />
       </Card>
@@ -241,19 +249,28 @@ function DrillTargets({ targets, onPick }) {
     <Card id="drill-targets" title="Drill-target shortlist — ranked by value of information" tag="MODEL_INFERENCE">
       <div className="overflow-x-auto">
         <table className="data">
-          <thead><tr><th>#</th><th>Location</th><th>Zone</th><th className="text-right">Confidence</th><th className="text-right">Uncertainty</th><th className="text-right">VOI</th><th>Cover</th><th>Rationale</th></tr></thead>
+          <thead><tr><th>#</th><th>Location</th><th>Zone</th><th className="text-right">Confidence</th><th className="text-right">Uncertainty</th><th className="text-right">VOI</th><th>Cover</th><th className="text-right">P(ore)</th><th className="text-right">Ore, Mt (P10 · P50 · P90)</th><th>Rationale</th></tr></thead>
           <tbody>
             {targets.map((d) => (
               <tr key={d.target_id} className="cursor-pointer hover:bg-ink-800/60" onClick={() => onPick({ lat: d.latitude, lng: d.longitude })}>
                 <td className="font-mono">{d.target_id}</td><td className="font-mono text-xs">{d.latitude}, {d.longitude}</td><td>{d.zone}</td>
                 <td className="num text-right">{d.confidence.toFixed(2)}</td><td className="num text-right">{d.uncertainty.toFixed(2)}</td><td className="num text-right">{d.value_of_information.toFixed(2)}</td>
-                <td className="text-xs">{d.cover}</td><td className="text-xs text-ink-300">{d.reasons.join(" · ")}</td>
+                <td className="text-xs">{d.cover}</td>
+                <td className="num text-right">{d.tonnage ? pct(d.tonnage.p_ore_present) : "—"}</td>
+                <td className="num whitespace-nowrap text-right">{d.tonnage ? d.tonnage.ore_tonnes_p10_p50_p90.map((x) => fmt(x / 1e6, 2)).join(" · ") : "—"}</td>
+                <td className="text-xs text-ink-300">{d.reasons.join(" · ")}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <p className="mt-2 text-xs text-ink-400">VOI = confidence × uncertainty: holes where the ground looks promising <i>and</i> is least constrained teach the most. Cells within 3 km of operating leases are excluded. {fmt(targets.length)} targets, ≥ 6 km apart.</p>
+      {targets[0]?.tonnage && (
+        <p className="mt-1 text-xs text-amber-200/90">
+          Tonnage columns: {targets[0].tonnage.label} Assumed strike {targets[0].tonnage.assumptions.strike_length_m.join("–")} m, down-dip {targets[0].tonnage.assumptions.down_dip_extent_m.join("–")} m,
+          continuity {targets[0].tonnage.assumptions.continuity_fraction.join("–")}, density {targets[0].tonnage.assumptions.bulk_density_t_m3.join("–")} t/m³; grade and thickness from kriging. P(ore) is the chance the block clears the cut-off at all; a P10 or P50 of 0 means it may not.
+        </p>
+      )}
     </Card>
   );
 }

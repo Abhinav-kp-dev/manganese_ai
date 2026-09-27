@@ -169,7 +169,8 @@ def overview():
 
 
 # ------------------------------------------------------------------------------------ module 1
-LAYERS = ["confidence", "uncertainty", "kriged_grade_pct", "kriging_sd_pct", "surface_prob", "data_support", "cover_type"]
+LAYERS = ["confidence", "uncertainty", "kriged_grade_pct", "kriging_sd_pct", "p_grade_above_cutoff", "p_grade_above_cutoff_ik",
+          "surface_prob", "data_support", "cover_type"]
 
 
 @router.get("/reserves/grid")
@@ -201,7 +202,8 @@ def reserve_cell(lat: float, lon: float):
         "latitude": _r(r.latitude, 4), "longitude": _r(r.longitude, 4), "zone": r.zone,
         "confidence": _r(r.confidence, 3), "uncertainty": _r(r.uncertainty, 3),
         "subsurface": {"kriged_grade_pct": _r(r.kriged_grade_pct, 2), "kriging_sd_pct": _r(r.kriging_sd_pct, 2),
-                       "p_grade_above_cutoff": _r(r.p_grade_above_cutoff, 3), "data_support": _r(r.data_support, 3)},
+                       "p_grade_above_cutoff": _r(r.p_grade_above_cutoff, 3), "p_grade_above_cutoff_ik": _r(r.p_grade_above_cutoff_ik, 3),
+                       "data_support": _r(r.data_support, 3)},
         "surface": {"probability": _r(r.surface_prob, 3), "model_spread": _r(r.surface_model_spread, 3),
                     "cover": r.cover_name, "proxy_reliability": COVER_RELIABILITY[int(r.cover_type)], "features": feats},
         "tags": {"confidence": MODEL_INFERENCE, "subsurface": MODEL_INFERENCE, "surface.features": OBSERVED},
@@ -231,7 +233,7 @@ def reserve_validation():
     m1 = STATE.m1
     return {"variogram": m1["variogram"], "kriging_cv": m1["kriging_cv"], "surface_validation": m1["surface_validation"],
             "feature_importance": m1["feature_importance"], "simulation_check": m1["simulation_check"],
-            "cutoff_mn_pct": CUTOFF_MN_PCT, "meta": _meta("prospectivity")}
+            "probability_models": m1["probability_models"], "cutoff_mn_pct": CUTOFF_MN_PCT, "meta": _meta("prospectivity")}
 
 
 # ------------------------------------------------------------------------------------ module 2
