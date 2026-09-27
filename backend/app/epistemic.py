@@ -6,7 +6,8 @@ MODEL_INFERENCE = "MODEL_INFERENCE"  # derived by an ML / geostatistical model
 SCENARIO = "SCENARIO"            # hypothetical what-if, not a prediction
 
 DISCLAIMERS = {
-    "synthetic": "Demo mode: production, borehole and satellite values are simulated (is_synthetic = TRUE). "
+    "synthetic": "Demo mode: production, borehole and the model's satellite values are simulated (is_synthetic = TRUE); "
+                 "the Sentinel-2 imagery and the real-data check (/api/reserves/real) use real satellite data. "
                  "Outputs demonstrate the method and are not scientifically validated for MOIL operations.",
     "mixed": "Mixed mode: uploaded real records are combined with simulated records. Outputs are not validated.",
     "prospectivity": "Prospectivity is a drilling-prioritisation aid, not a reserve or resource estimate under UNFC / JORC / CRIRSCO. "

@@ -11,7 +11,9 @@ import hmac
 import json
 import os
 import secrets
+import threading
 import time
+from collections import deque
 
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy import Boolean, String, select
@@ -22,8 +24,14 @@ from ml.reference import MINES
 from .db import DATA_DIR, Base, SessionLocal
 
 TOKEN_TTL_S = int(os.getenv("MH_TOKEN_TTL_HOURS", "12")) * 3600
-DEMO_PASSWORD = os.getenv("MH_DEMO_PASSWORD", "demo123")
+DEFAULT_DEMO_PASSWORD = "demo123"
+DEMO_PASSWORD = os.getenv("MH_DEMO_PASSWORD", DEFAULT_DEMO_PASSWORD)
 DEMO_ACCOUNTS_ENABLED = os.getenv("MH_DEMO_ACCOUNTS", "1") == "1"
+MIN_SECRET_LEN = 32
+MIN_PASSWORD_LEN = 12
+LOGIN_MAX_FAILURES = int(os.getenv("MH_LOGIN_MAX_FAILURES", "5"))       # per account and client, per window
+LOGIN_MAX_FAILURES_PER_IP = int(os.getenv("MH_LOGIN_MAX_FAILURES_PER_IP", "20"))
+LOGIN_WINDOW_S = int(os.getenv("MH_LOGIN_WINDOW_S", "300"))
 
 ROLES = {
     "ADMIN": {"label": "Administrator", "perms": {"read", "decide", "defer", "upload_data", "run_pipeline", "manage_users"}},
@@ -105,6 +113,87 @@ def decode_token(token: str) -> dict:
     if data["exp"] < time.time():
         raise HTTPException(401, "Session expired — please sign in again")
     return data
+
+
+# ------------------------------------------------------------------------------ production guard
+def production_config_problems(demo_enabled: bool = DEMO_ACCOUNTS_ENABLED, secret: str | None = None,
+                               password: str = DEMO_PASSWORD) -> list[str]:
+    """Settings a real deployment (MH_DEMO_ACCOUNTS=0) must have. Demo mode is exempt."""
+    if demo_enabled:
+        return []
+    secret = os.getenv("MH_SECRET", "") if secret is None else secret
+    problems = []
+    if len(secret) < MIN_SECRET_LEN:
+        problems.append(f"MH_SECRET must be a random string of at least {MIN_SECRET_LEN} characters")
+    if password == DEFAULT_DEMO_PASSWORD or len(password) < MIN_PASSWORD_LEN:
+        problems.append(f"MH_DEMO_PASSWORD (initial password of the role accounts) must be changed from the default "
+                        f"and be at least {MIN_PASSWORD_LEN} characters")
+    return problems
+
+
+def accounts_with_default_password() -> list[str]:
+    with SessionLocal() as s:
+        users = s.scalars(select(User).where(User.active.is_(True))).all()
+    return sorted(u.username for u in users if verify_password(DEFAULT_DEMO_PASSWORD, u.password_hash))
+
+
+def enforce_production_config():
+    """Refuse to start a real deployment with a guessable signing key or the public demo password."""
+    problems = production_config_problems()
+    if not problems and not DEMO_ACCOUNTS_ENABLED:
+        from .db import init_db
+        init_db()
+        seed_users()
+        stale = accounts_with_default_password()
+        if stale:
+            problems.append(f"accounts still use the demo password ({', '.join(stale)}); delete {DATA_DIR} to reseed them "
+                            "with MH_DEMO_PASSWORD, or reset their passwords")
+    if problems:
+        raise RuntimeError("Refusing to start with MH_DEMO_ACCOUNTS=0: " + "; ".join(problems))
+
+
+# ------------------------------------------------------------------------------ login throttling
+_failures: dict[str, deque] = {}
+_failures_lock = threading.Lock()
+
+
+def _recent(key: str, now: float) -> deque:
+    q = _failures.setdefault(key, deque())
+    while q and now - q[0] > LOGIN_WINDOW_S:
+        q.popleft()
+    return q
+
+
+def check_login_allowed(username: str, client: str):
+    """429 after too many failed sign-ins for this account from this client, or from this client overall."""
+    now = time.time()
+    with _failures_lock:
+        if len(_failures) > 10_000:  # keep memory bounded under username spraying from many clients
+            for k in [k for k, q in _failures.items() if not q or now - q[-1] > LOGIN_WINDOW_S]:
+                del _failures[k]
+        acct = _recent(f"acct:{client}|{username.lower()}", now)
+        ip = _recent(f"ip:{client}", now)
+        for q, limit in ((acct, LOGIN_MAX_FAILURES), (ip, LOGIN_MAX_FAILURES_PER_IP)):
+            if len(q) >= limit:
+                retry = int(LOGIN_WINDOW_S - (now - q[0])) + 1
+                raise HTTPException(429, f"Too many failed sign-in attempts. Try again in {retry} s.", headers={"Retry-After": str(retry)})
+
+
+def record_login_failure(username: str, client: str):
+    now = time.time()
+    with _failures_lock:
+        _recent(f"acct:{client}|{username.lower()}", now).append(now)
+        _recent(f"ip:{client}", now).append(now)
+
+
+def clear_login_failures(username: str, client: str):
+    with _failures_lock:
+        _failures.pop(f"acct:{client}|{username.lower()}", None)
+
+
+def reset_login_throttle():
+    with _failures_lock:
+        _failures.clear()
 
 
 def seed_users():

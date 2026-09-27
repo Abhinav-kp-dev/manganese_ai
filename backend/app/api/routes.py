@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -21,7 +21,8 @@ from ml.reference import CLUSTERS, DATA_SOURCES, MINES, STUDY_BBOX
 from ml.scenarios import PRESETS, SCENARIOS, overrides_for, realigned_target
 
 from .. import ingest, pipeline
-from ..auth import DEMO_ACCOUNTS_ENABLED, DEMO_PASSWORD, ROLES, User, authenticate, current_user, in_scope, issue_token, public_user, require
+from ..auth import (DEMO_ACCOUNTS_ENABLED, DEMO_PASSWORD, ROLES, User, authenticate, check_login_allowed, clear_login_failures, current_user,
+                    in_scope, issue_token, public_user, record_login_failure, require)
 from ..db import AuditEntry, Borehole, MinePlan, ProductionLog, SessionLocal, WeatherFeature
 from ..epistemic import DISCLAIMERS, FORECAST, FORECAST_TAGS, MODEL_INFERENCE, OBSERVED, SCENARIO, meta
 from ..state import STATE
@@ -78,8 +79,15 @@ class LoginIn(BaseModel):
 
 
 @public.post("/auth/login")
-def login(body: LoginIn):
-    u = authenticate(body.username, body.password)
+def login(body: LoginIn, request: Request):
+    client = request.client.host if request.client else "unknown"
+    check_login_allowed(body.username, client)
+    try:
+        u = authenticate(body.username, body.password)
+    except HTTPException:
+        record_login_failure(body.username, client)
+        raise
+    clear_login_failures(body.username, client)
     return {"token": issue_token(u), "user": public_user(u)}
 
 

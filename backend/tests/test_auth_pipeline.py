@@ -91,3 +91,49 @@ def test_power_parser_and_failed_fetch_is_logged(client, monkeypatch):
         s.commit()
     bad = client.post("/api/pipeline/run/nasa_power").json()["results"][0]
     assert bad["status"] == "failed" and "network unreachable" in bad["message"]
+
+
+def test_failed_logins_are_throttled(client):
+    from app.auth import LOGIN_MAX_FAILURES, reset_login_throttle
+    from app.main import app
+    anon = TestClient(app)
+    try:
+        for _ in range(LOGIN_MAX_FAILURES):
+            assert anon.post("/api/auth/login", json={"username": "planner", "password": "wrong"}).status_code == 401
+        r = anon.post("/api/auth/login", json={"username": "planner", "password": "demo123"})
+        assert r.status_code == 429 and int(r.headers["Retry-After"]) > 0  # even the right password waits
+        assert anon.post("/api/auth/login", json={"username": "geologist", "password": "demo123"}).status_code == 200
+    finally:
+        reset_login_throttle()
+    assert anon.post("/api/auth/login", json={"username": "planner", "password": "demo123"}).status_code == 200
+
+
+def test_per_client_throttle_stops_password_spraying(client, monkeypatch):
+    from app import auth
+    from app.main import app
+    monkeypatch.setattr(auth, "LOGIN_MAX_FAILURES_PER_IP", 3)
+    anon = TestClient(app)
+    try:
+        for name in ("u1", "u2", "u3"):
+            assert anon.post("/api/auth/login", json={"username": name, "password": "x"}).status_code == 401
+        assert anon.post("/api/auth/login", json={"username": "u4", "password": "x"}).status_code == 429
+    finally:
+        auth.reset_login_throttle()
+
+
+def test_production_mode_requires_secret_and_non_default_password():
+    from app.auth import production_config_problems
+    assert production_config_problems(demo_enabled=True, secret="", password="demo123") == []
+    p = production_config_problems(demo_enabled=False, secret="short", password="demo123")
+    assert len(p) == 2 and "MH_SECRET" in p[0] and "MH_DEMO_PASSWORD" in p[1]
+    assert production_config_problems(demo_enabled=False, secret="x" * 32, password="a-long-site-password") == []
+
+
+def test_production_mode_refuses_accounts_left_on_the_demo_password(monkeypatch):
+    import pytest
+    from app import auth
+    monkeypatch.setattr(auth, "DEMO_ACCOUNTS_ENABLED", False)
+    monkeypatch.setattr(auth, "DEMO_PASSWORD", "a-long-site-password")
+    monkeypatch.setenv("MH_SECRET", "s" * 40)
+    with pytest.raises(RuntimeError, match="still use the demo password"):
+        auth.enforce_production_config()  # the test database was seeded in demo mode

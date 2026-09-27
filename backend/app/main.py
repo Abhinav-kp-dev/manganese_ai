@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import pipeline
 from .api.routes import public, router
-from .auth import seed_users
+from .auth import enforce_production_config, seed_users
 from .state import STATE
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -36,6 +36,7 @@ def _bootstrap():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    enforce_production_config()  # raises (and so stops startup) on an unsafe real deployment
     if os.getenv("MH_SYNC_BOOTSTRAP") == "1":
         _bootstrap()
     else:

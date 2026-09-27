@@ -15,6 +15,9 @@
    ├ spatial-block CV (30 km)                ├ monotone constraints + conformal (CQR)
    └ fusion → confidence + uncertainty       ├ TreeSHAP → named drivers + evidence guardrail
        └ drill targets by value of info      └ baselines, coverage, Brier, capacity guardrail
+         + conceptual tonnage (Monte Carlo)
+   Real-data check (ml/realdata.py): same surface model on real Sentinel-2 / Copernicus DEM /
+   WorldCover features (backend/data/real) and real Mn locations; spatial CV + disturbance baseline
                                                         │ deficit = target − P50 > 0
                                                         ▼
                                        Module 3  LP corrective-action engine (HiGHS)
@@ -35,7 +38,8 @@
 |---|---|
 | Model utilisation (production ÷ rated monthly capacity), not tonnes | One model generalises across mines from 250 to 1,600 t/day. |
 | Direct multi-horizon models instead of recursive roll-forward | Errors don't compound, and each horizon gets its own calibrated interval. |
-| Only ex-ante inputs (plans, IMD outlook, last observations) | No look-ahead. Realised rain and downtime of the forecast month are never features. |
+| Only ex-ante inputs (plans, IMD outlook, last observations) | No look-ahead. Realised rain and downtime of the forecast month are never features, and fleet health is read at issue time (month t-h+1). Enforced by `tests/test_leakage.py`. |
+| Real features built offline and committed | The app needs no network or geospatial stack at runtime; `provenance.json` records every scene and tile. |
 | Monotone constraints (rain ↓, fleet health ↑, blast window ↑ …) | Keeps what-if scenarios physically coherent. |
 | Split-conformal widening of P10–P90 | Coverage is measured, not assumed. |
 | TreeSHAP via `xgboost pred_contribs` | Exact, fast, no extra dependency. Grouped into mechanisms planners recognise. |

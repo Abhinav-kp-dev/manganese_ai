@@ -1,4 +1,4 @@
-.PHONY: install dev api web build test run reset-demo
+.PHONY: install dev api web build test test-e2e run reset-demo
 install:
 	pip install -r backend/requirements-dev.txt
 	cd frontend && npm ci
@@ -10,6 +10,8 @@ build:
 	cd frontend && npm run build
 test:
 	cd backend && python -m pytest -q
+test-e2e:
+	cd frontend && npx playwright test
 run: build
 	cd backend && uvicorn app.main:app --port 8000
 # Deletes backend/var (demo database, trained models, audit log, signing key) so the demo data is regenerated.

@@ -27,13 +27,20 @@ export function useApi(path, deps = []) {
   const load = useCallback(async () => {
     if (!path) return;
     setState((s) => ({ ...s, loading: true }));
-    for (let attempt = 0; attempt < 20; attempt++) {
+    // 503 = models still training (first start, or after new data). Keep polling for up to ~10 minutes:
+    // a cold start on a small host can take well over a minute.
+    const started = Date.now();
+    for (;;) {
       try {
         const data = await api(path);
         setState({ data, error: null, loading: false, stale: false });
         return;
       } catch (e) {
-        if (e.status === 503) { setState((s) => ({ ...s, training: true })); await new Promise((r) => setTimeout(r, 3000)); continue; }
+        if (e.status === 503 && Date.now() - started < 600_000) {
+          setState((s) => ({ ...s, training: true, waitedSeconds: Math.round((Date.now() - started) / 1000) }));
+          await new Promise((r) => setTimeout(r, 3000));
+          continue;
+        }
         const cached = await get(`cache:${path}`).catch(() => null);
         setState(cached ? { data: cached, error: null, loading: false, stale: true } : { data: null, error: e, loading: false, stale: false });
         return;

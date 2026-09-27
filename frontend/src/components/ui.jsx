@@ -91,7 +91,7 @@ export function Loading({ state }) {
   const { t } = useI18n();
   return (
     <div className="flex items-center gap-3 p-10 text-ink-400">
-      <Loader2 className="h-5 w-5 animate-spin" /> {state?.training ? t("training") : t("loading")}
+      <Loader2 className="h-5 w-5 animate-spin" /> {state?.training ? `${t("training")}${state.waitedSeconds ? ` (${state.waitedSeconds} s)` : ""}` : t("loading")}
     </div>
   );
 }

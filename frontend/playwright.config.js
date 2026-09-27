@@ -3,6 +3,7 @@
 import { defineConfig, devices } from "@playwright/test";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const PORT = Number(process.env.E2E_PORT || 8765);
 const DATA_DIR = process.env.E2E_DATA_DIR || path.join(os.tmpdir(), `mh-e2e-${process.pid}`);
@@ -19,7 +20,7 @@ export default defineConfig({
   use: { baseURL: `http://127.0.0.1:${PORT}`, trace: "retain-on-failure", ...devices["Desktop Chrome"] },
   webServer: {
     command: `${PYTHON} -m uvicorn app.main:app --host 127.0.0.1 --port ${PORT}`,
-    cwd: path.resolve("../backend"),
+    cwd: fileURLToPath(new URL("../backend", import.meta.url)),
     url: `http://127.0.0.1:${PORT}/api/health`,
     timeout: 240_000,
     reuseExistingServer: false,

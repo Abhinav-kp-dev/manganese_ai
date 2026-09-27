@@ -3,8 +3,17 @@
 **"How can satellites detect ore underground?"**
 They can't. Sentinel-2/1 feed a surface-proxy layer (ferric-iron and clay ratios, SAR roughness) that ranks where to drill, and the IMD/MODIS variables drive the production forecast. Sub-surface estimates come from kriged boreholes.
 
+**"Show me the satellite data."**
+The Reserves map overlays a real Sentinel-2 composite: 18 cloud-masked dry-season L2A scenes from 2024–2025, in true colour or SWIR false colour. The same scenes, the Copernicus DEM and ESA WorldCover give real features for every 2.2 km cell (`backend/data/real/`, with scene IDs in `provenance.json`).
+
+**"Does the model work on real data?"**
+Not yet, and we show that. On real Sentinel-2 + DEM features with the 10 real Mn locations in the area (MOIL's mines), the spatial-CV AUC is 0.56 with a 95% interval of 0.31–0.77, which includes chance. A bare-ground-only baseline scores 0.64, because every label is an active mine. The fix is more, better labels: GSI Bhukosh occurrences away from the mines. The pipeline takes them as a CSV and re-runs the check.
+
 **"What's your accuracy?"**
-On the held-out year of demo data, next-month P50 MAE is 418 t, against 1,050 t for persistence and 867 t for seasonal-naive, with P10–P90 coverage of 85%. (An earlier version reported 321 t; that figure benefited from two look-ahead leaks we found and removed, and a test now guards against them.) It is synthetic data, so it is optimistic, and it is reproducible live on the Integrity page. The reserve surface model has spatial-CV AUC 0.91 (CI 0.87–0.95) from 61 occurrences, and we show the random-CV figure (0.93) to explain why we don't use it.
+On the held-out year of demo data, next-month P50 MAE is 418 t, against 1,050 t for persistence and 867 t for seasonal-naive, with P10–P90 coverage of 85%. (An earlier version reported 321 t; that figure benefited from two look-ahead leaks we found and removed, and a test now guards against them.) It is synthetic data, so it is optimistic, and it is reproducible live on the Integrity page. The reserve surface model has spatial-CV AUC 0.91 (CI 0.87–0.95) from 61 simulated occurrences, and we show the random-CV figure (0.93) to explain why we don't use it. That 0.91 is not evidence of real-world skill: on real satellite data the same model scores 0.56 (see above).
+
+**"How much ore is there?"**
+Each drill target has a conceptual range (P10/P50/P90 ore and contained Mn) from kriged grade and thickness and stated geometry assumptions, plus the chance that the block clears the cut-off at all. It is labelled as a conceptual exploration-target range, not a Mineral Resource, and it runs on the demo's synthetic boreholes.
 
 **"Is this usable for reserve reporting?"**
 No. It is a drilling-prioritisation tool. UNFC / JORC / CRIRSCO reporting needs drilling, assay and a Competent Person's sign-off.
