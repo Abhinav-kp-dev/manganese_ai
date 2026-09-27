@@ -1,0 +1,13 @@
+name,kind,latitude,longitude,location_precision_km,source,source_ref,use_for_training,note
+Balaghat mine (BLG-01),Operating MOIL mine,21.855,80.235,3,MOIL Limited public mine list (moil.nic.in),BLG-01,True,Coordinates approximate (+-2-3 km); same values as ml/reference.py
+Ukwa mine (BLG-02),Operating MOIL mine,21.968,80.472,3,MOIL Limited public mine list (moil.nic.in),BLG-02,True,Coordinates approximate (+-2-3 km); same values as ml/reference.py
+Tirodi mine (BLG-03),Operating MOIL mine,21.685,79.72,3,MOIL Limited public mine list (moil.nic.in),BLG-03,True,Coordinates approximate (+-2-3 km); same values as ml/reference.py
+Sitapatore mine (BLG-04),Operating MOIL mine,21.735,79.845,3,MOIL Limited public mine list (moil.nic.in),BLG-04,True,Coordinates approximate (+-2-3 km); same values as ml/reference.py
+Dongri Buzurg mine (BHD-01),Operating MOIL mine,21.45,79.76,3,MOIL Limited public mine list (moil.nic.in),BHD-01,True,Coordinates approximate (+-2-3 km); same values as ml/reference.py
+Chikla mine (BHD-02),Operating MOIL mine,21.515,79.66,3,MOIL Limited public mine list (moil.nic.in),BHD-02,True,Coordinates approximate (+-2-3 km); same values as ml/reference.py
+Kandri mine (NGP-01),Operating MOIL mine,21.418,79.263,3,MOIL Limited public mine list (moil.nic.in),NGP-01,True,Coordinates approximate (+-2-3 km); same values as ml/reference.py
+Munsar mine (NGP-02),Operating MOIL mine,21.398,79.232,3,MOIL Limited public mine list (moil.nic.in),NGP-02,True,Coordinates approximate (+-2-3 km); same values as ml/reference.py
+Beldongri mine (NGP-03),Operating MOIL mine,21.38,79.12,3,MOIL Limited public mine list (moil.nic.in),NGP-03,True,Coordinates approximate (+-2-3 km); same values as ml/reference.py
+Gumgaon mine (NGP-04),Operating MOIL mine,21.42,78.95,3,MOIL Limited public mine list (moil.nic.in),NGP-04,True,Coordinates approximate (+-2-3 km); same values as ml/reference.py
+Tirodi Mine (mindat locality 25310),Mineral locality (metamorphic Mn silicates),21.683333,79.733333,2,"EarthByte Manganese-paleogeography, data/derived/mn_occurrences_with_coords.csv (MIT)",mindat 25310,True,Same deposit as the Tirodi MOIL mine; merges into one training cell
+Nagpur-Bhandara (Maynard 2010),Deposit district,21.4,79.5,30,"EarthByte Manganese-paleogeography, data/derived/mn_deposit_database.csv (MIT; Maynard 2010)",coord_confidence=lit,False,"District-scale centroid, far coarser than a 2 km cell; listed, not trained on"

@@ -17,6 +17,7 @@ from ml.features import build_panel
 from ml.forecasting import attribution_summary, capacity_guardrail, forecast, train_module2
 from ml.optimizer import optimise
 from ml.prospectivity import run_module1
+from ml.realdata import FILES as REAL_FILES, REAL_DIR, run_real_module1
 from ml.reference import MINES
 
 from .db import (DATA_DIR, Borehole, Forecast, Mine, MinePlan, Occurrence, ProductionLog, Recommendation,
@@ -26,6 +27,7 @@ log = logging.getLogger("manganese_horizon")
 MODEL_VERSION_PREFIX = "mh-1.1"  # bump whenever features or training change: it keys the artefact cache
 MIN_REAL_ROWS_FOR_REAL_ONLY = 240  # ~2 years x 10 mines before synthetic rows are dropped from training
 GRID_FILE = DATA_DIR / "geology_grid.pkl"
+REAL_EXTRA_LABELS = DATA_DIR / "real_occurrences_extra.csv"  # optional GSI/other occurrences added on site
 
 
 def _df(session, model):
@@ -37,6 +39,7 @@ class AppState:
         self.lock = threading.RLock()
         self.ready = False
         self.m1 = self.m2 = None
+        self.real = {"available": False, "reason": "not trained yet"}
         self.panel = None
         self.data_mode = "SYNTHETIC"
         self.model_version = None
@@ -88,7 +91,18 @@ class AppState:
         h = hashlib.sha256()
         for k in ("production_logs", "weather_features", "mine_plans", "boreholes", "occurrences"):
             h.update(pd.util.hash_pandas_object(frames[k].drop(columns=[c for c in ("id",) if c in frames[k]]), index=False).values.tobytes())
+        for f in [REAL_DIR / REAL_FILES["features"], REAL_DIR / REAL_FILES["labels"], REAL_EXTRA_LABELS]:
+            h.update(f.read_bytes() if f.exists() else b"-")
         return h.hexdigest()[:10]
+
+    @staticmethod
+    def train_real():
+        """Real-data Module 1 evaluation. Never allowed to take the demo down."""
+        try:
+            return run_real_module1(extra_labels=REAL_EXTRA_LABELS)
+        except Exception as e:  # noqa: BLE001
+            log.exception("Real-data evaluation failed")
+            return {"available": False, "reason": f"Real-data evaluation failed: {e}"}
 
     # ------------------------------------------------------------------ training
     def train(self, force=False):
@@ -101,12 +115,14 @@ class AppState:
                 art = joblib.load(cache)
             else:
                 log.info("Training Module 1 and Module 2 (data fingerprint %s)", fp)
-                art = {"m1": run_module1(frames), "m2": train_module2(build_panel(frames["production_logs"], frames["weather_features"], frames["mine_plans"]))}
+                art = {"m1": run_module1(frames), "m2": train_module2(build_panel(frames["production_logs"], frames["weather_features"], frames["mine_plans"])),
+                       "real": self.train_real()}
                 for old in DATA_DIR.glob("artefacts_*.joblib"):
                     old.unlink()
                 joblib.dump(art, cache)
             self.frames = frames
             self.m1, self.m2 = art["m1"], art["m2"]
+            self.real = art.get("real") or self.train_real()
             self.panel = build_panel(frames["production_logs"], frames["weather_features"], frames["mine_plans"])
             self.model_version = f"{MODEL_VERSION_PREFIX}+{fp}"
             self.trained_at = pd.Timestamp.now('UTC').isoformat()

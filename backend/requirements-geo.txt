@@ -1,0 +1,4 @@
+# Only needed to rebuild backend/data/real (python -m ml.remote_sensing); the app itself does not import these.
+-r requirements.txt
+rasterio>=1.3
+pyproj>=3.6
