@@ -546,7 +546,8 @@ def integrity():
     limitations = [
         "No access to MOIL's proprietary production/drilling telemetry: synthetic data stands in, tagged is_synthetic, with an MoU-dependent path to real data (CSV upload is already wired).",
         f"Module 1's demo fusion trains on {val['n_positive']} synthetic occurrences and synthetic satellite features, so its AUC is not evidence of real-world skill.",
-        ("On real data the surface proxy has not yet shown skill: " + real_evidence) if real.get("available") else real_evidence,
+        (("On real data the surface proxy has not yet shown skill (the AUC interval includes 0.5): " if real["validation"]["spatial_cv_auc_ci95"][0] <= 0.5
+          else "On real data the surface proxy shows some skill, still from very few labels: ") + real_evidence) if real.get("available") else real_evidence,
         "Every public, point-accurate Mn location in the study area is an operating mine, so a real-data surface model can learn mining disturbance instead of geology. GSI Bhukosh occurrences (login required) are the next step.",
         "Sentinel-1 SAR, lineaments and mapped lithology are simulated only: no open SAR archive for India and GSI layers need a login.",
         "Optical indices degrade under monsoon cloud; the real composite uses dry-season (Feb–Apr) scenes for that reason.",

@@ -105,7 +105,7 @@ export function ErrorBox({ error }) {
 }
 
 export function Note({ children, tone = "info" }) {
-  const cls = tone === "warn" ? "border-amber-500/40 bg-amber-500/5 text-amber-200" : "border-ink-600 bg-ink-800/60 text-ink-300";
+  const cls = tone === "warn" ? "border-amber-500/40 bg-amber-500/5 text-amber-800 dark:text-amber-200" : "border-ink-600 bg-ink-800/60 text-ink-300";
   return (
     <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-xs ${cls}`}>
       {tone === "warn" ? <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" /> : <Info className="mt-px h-3.5 w-3.5 shrink-0" />}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { del, get, keys, set } from "idb-keyval";
 import { getToken } from "./auth.jsx";
 
-const BASE = import.meta.env.VITE_API_BASE || "";
+export const BASE = import.meta.env.VITE_API_BASE || "";
 
 export async function api(path, opts = {}) {
   const token = getToken();
