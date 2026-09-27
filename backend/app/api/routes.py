@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
@@ -169,7 +169,8 @@ def overview():
 
 
 # ------------------------------------------------------------------------------------ module 1
-LAYERS = ["confidence", "uncertainty", "kriged_grade_pct", "kriging_sd_pct", "surface_prob", "data_support", "cover_type"]
+LAYERS = ["confidence", "uncertainty", "kriged_grade_pct", "kriging_sd_pct", "p_grade_above_cutoff", "p_grade_above_cutoff_ik",
+          "surface_prob", "data_support", "cover_type"]
 
 
 @router.get("/reserves/grid")
@@ -201,7 +202,8 @@ def reserve_cell(lat: float, lon: float):
         "latitude": _r(r.latitude, 4), "longitude": _r(r.longitude, 4), "zone": r.zone,
         "confidence": _r(r.confidence, 3), "uncertainty": _r(r.uncertainty, 3),
         "subsurface": {"kriged_grade_pct": _r(r.kriged_grade_pct, 2), "kriging_sd_pct": _r(r.kriging_sd_pct, 2),
-                       "p_grade_above_cutoff": _r(r.p_grade_above_cutoff, 3), "data_support": _r(r.data_support, 3)},
+                       "p_grade_above_cutoff": _r(r.p_grade_above_cutoff, 3), "p_grade_above_cutoff_ik": _r(r.p_grade_above_cutoff_ik, 3),
+                       "data_support": _r(r.data_support, 3)},
         "surface": {"probability": _r(r.surface_prob, 3), "model_spread": _r(r.surface_model_spread, 3),
                     "cover": r.cover_name, "proxy_reliability": COVER_RELIABILITY[int(r.cover_type)], "features": feats},
         "tags": {"confidence": MODEL_INFERENCE, "subsurface": MODEL_INFERENCE, "surface.features": OBSERVED},
@@ -231,7 +233,54 @@ def reserve_validation():
     m1 = STATE.m1
     return {"variogram": m1["variogram"], "kriging_cv": m1["kriging_cv"], "surface_validation": m1["surface_validation"],
             "feature_importance": m1["feature_importance"], "simulation_check": m1["simulation_check"],
-            "cutoff_mn_pct": CUTOFF_MN_PCT, "meta": _meta("prospectivity")}
+            "probability_models": m1["probability_models"], "cutoff_mn_pct": CUTOFF_MN_PCT, "meta": _meta("prospectivity")}
+
+
+REAL_LAYERS = ["surface_prob_real", "ferric_ratio_b4_b2", "clay_ratio_b11_b12", "ndvi", "ndwi", "elevation_m", "slope_deg",
+               "ruggedness_m", "frac_bare", "frac_built", "frac_tree", "frac_cropland", "frac_water"]
+IMAGERY = {"s2_true_colour.png": "true_colour", "s2_false_colour_swir.png": "false_colour"}
+
+
+def _real_summary(real):
+    if not real.get("available"):
+        return {"available": False, "reason": real.get("reason")}
+    v, prov = real["validation"], real["provenance"]
+    return {
+        "available": True,
+        "validation": v, "feature_importance": real["feature_importance"], "univariate": real["univariate"],
+        "disturbance_auc": real["disturbance_auc"], "n_labels_listed": real["n_labels_listed"], "n_labels_used": real["n_labels_used"],
+        "labels": real["labels"].replace({np.nan: None}).to_dict("records"),
+        "provenance": {"generated_at": prov["generated_at"], "scenes": prov["sentinel2"]["scenes"], "dem_tiles": prov["dem"]["tiles"],
+                       "worldcover_tiles": prov["worldcover"]["tiles"], "not_available": prov["not_available"],
+                       "attribution": prov["attribution"], "season": prov["sentinel2"]["season"]},
+    }
+
+
+@router.get("/reserves/real")
+def reserve_real():
+    """Module 1 surface proxy on real Sentinel-2 / Copernicus DEM features and real Mn locations."""
+    _ready()
+    real = STATE.real
+    out = _real_summary(real)
+    if real.get("available"):
+        g = real["grid"].sort_values(["row", "col"])
+        out.update({
+            "bbox": STUDY_BBOX, "step_deg": synthetic.GRID_STEP_DEG, "rows": int(g.row.max()) + 1, "cols": int(g.col.max()) + 1,
+            "layers": {k: [None if not np.isfinite(x) else round(float(x), 4) for x in g[k].values] for k in REAL_LAYERS},
+            "imagery": {v: f"/api/imagery/{k}" for k, v in IMAGERY.items()},
+            "tags": {"surface_prob_real": MODEL_INFERENCE} | {k: OBSERVED for k in REAL_LAYERS[1:]},
+        })
+    out["meta"] = _meta("prospectivity", "satellite")
+    return out
+
+
+@public.get("/imagery/{name}")
+def imagery(name: str):
+    """Public Sentinel-2 composites (open ESA Copernicus data) for the map overlay."""
+    from ml.realdata import REAL_DIR
+    if name not in IMAGERY or not (REAL_DIR / name).exists():
+        raise HTTPException(404, "Unknown image")
+    return FileResponse(REAL_DIR / name, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
 # ------------------------------------------------------------------------------------ module 2
@@ -460,11 +509,23 @@ def integrity():
                   for t in (ProductionLog, WeatherFeature, MinePlan, Borehole)}
     copy_ok, copy_hits = _scan_copy()
     m = STATE.m2["metrics"][1]
+    real = STATE.real
+    if real.get("available"):
+        rv = real["validation"]
+        real_evidence = (f"Real Sentinel-2 + Copernicus DEM features, {rv['n_positive']} real Mn locations: spatial-CV AUC {rv['spatial_cv_auc']:.2f} "
+                         f"(95% CI {rv['spatial_cv_auc_ci95'][0]:.2f}–{rv['spatial_cv_auc_ci95'][1]:.2f}); bare/built-ground baseline {real['disturbance_auc']:.2f}. "
+                         f"Synthetic-data AUC for comparison: {val['spatial_cv_auc']:.2f}.")
+    else:
+        real_evidence = real.get("reason") or "Real data not available."
     checks = [
         {"id": "spatial_cv", "label": "Spatially-blocked CV used for Module 1 (never random k-fold)", "pass": val["method"].startswith("Spatially blocked"),
          "evidence": f"Spatial AUC {val['spatial_cv_auc']:.3f} vs random k-fold {val['random_kfold_auc_for_comparison']:.3f} (random CV is optimistic)."},
+        {"id": "real_data", "label": "Module 1 surface proxy re-validated on real satellite data and real Mn locations (result reported as is)",
+         "pass": bool(real.get("available")), "evidence": real_evidence},
         {"id": "no_leakage", "label": "No target-leakage features in Module 1", "pass": not (FORBIDDEN_FEATURES & set(SURFACE_FEATURES)),
          "evidence": f"Excluded: {', '.join(sorted(FORBIDDEN_FEATURES))}."},
+        {"id": "no_lookahead", "label": "Module 2 uses only information available at issue time", "pass": True,
+         "evidence": "Fleet health is read at month t-h+1; the rainfall outlook is climatology-anchored with realistic skill. tests/test_leakage.py scrambles every later value and requires identical features."},
         {"id": "monotone", "label": "Quantile monotonicity enforced (0 ≤ P10 ≤ P50 ≤ P90)", "pass": mono,
          "evidence": f"Checked {len(fcs)} live forecasts."},
         {"id": "baselines", "label": "Module 2 benchmarked against naive baselines on the same window", "pass": all(k in m for k in ("persistence_baseline", "seasonal_naive_baseline")),
@@ -484,18 +545,37 @@ def integrity():
     ]
     limitations = [
         "No access to MOIL's proprietary production/drilling telemetry: synthetic data stands in, tagged is_synthetic, with an MoU-dependent path to real data (CSV upload is already wired).",
-        f"Module 1 trains on {val['n_positive']} positive occurrences; the AUC confidence interval is wide and indicative only.",
-        "Optical indices degrade under monsoon cloud; Sentinel-1 SAR mitigates but does not eliminate this.",
+        f"Module 1's demo fusion trains on {val['n_positive']} synthetic occurrences and synthetic satellite features, so its AUC is not evidence of real-world skill.",
+        (("On real data the surface proxy has not yet shown skill (the AUC interval includes 0.5): " if real["validation"]["spatial_cv_auc_ci95"][0] <= 0.5
+          else "On real data the surface proxy shows some skill, still from very few labels: ") + real_evidence) if real.get("available") else real_evidence,
+        "Every public, point-accurate Mn location in the study area is an operating mine, so a real-data surface model can learn mining disturbance instead of geology. GSI Bhukosh occurrences (login required) are the next step.",
+        "Sentinel-1 SAR, lineaments and mapped lithology are simulated only: no open SAR archive for India and GSI layers need a login.",
+        "Optical indices degrade under monsoon cloud; the real composite uses dry-season (Feb–Apr) scenes for that reason.",
         "Kriging has no skill beyond ~one variogram range from boreholes; the map says so via its uncertainty layer.",
         "Corrective-action costs are indicative planning figures. Rail/road logistics are not yet modelled (future work).",
         "NASA POWER observations are stored alongside, not yet inside, the model features: mixing real weather with simulated production would corrupt training. They switch in once real MOIL production logs are onboarded.",
         "Sign-in is local (username/password, signed tokens). Integration with MOIL's directory (LDAP/SSO) is a deployment step.",
         "Forecast accuracy on synthetic data overstates what real data will give; re-validate after onboarding MOIL logs.",
     ]
+    real_vs_synthetic = [
+        {"metric": "Module 1 surface proxy, spatial-CV AUC", "synthetic": _r(val["spatial_cv_auc"], 3),
+         "real": _r(real["validation"]["spatial_cv_auc"], 3) if real.get("available") else None,
+         "note": "Real: Sentinel-2 + Copernicus DEM, operating-mine locations. Synthetic: simulated features built from the same truth that placed the occurrences."},
+        {"metric": "Module 1 surface proxy, 95% CI", "synthetic": [_r(x, 2) for x in val["spatial_cv_auc_ci95"]],
+         "real": [_r(x, 2) for x in real["validation"]["spatial_cv_auc_ci95"]] if real.get("available") else None, "note": ""},
+        {"metric": "Module 1 positives used", "synthetic": val["n_positive"], "real": real["validation"]["n_positive"] if real.get("available") else None, "note": ""},
+        {"metric": "Bare/built-ground baseline AUC (mining-disturbance check)", "synthetic": None,
+         "real": _r(real["disturbance_auc"], 3) if real.get("available") else None, "note": "If this rivals the model, the model is detecting mines, not ore."},
+        {"metric": "Module 2 +1 month P50 MAE (t)", "synthetic": _r(m["model_p50"]["mae_tonnes"], 0), "real": None,
+         "note": "Needs MOIL production logs (CSV upload / inbox is wired)."},
+    ]
     return {"checks": checks, "all_pass": all(c["pass"] for c in checks), "data_sources": DATA_SOURCES, "limitations": limitations,
+            "real_vs_synthetic": real_vs_synthetic,
             "row_counts": counts, "model_card": {
                 "module1": {"kriging": "Ordinary kriging, spherical variogram (weighted least squares)", "surface_model": "XGBoost classifier (PU framing, 3 km pseudo-absence buffer)",
-                            "features": [FEATURE_LABELS[f] for f in SURFACE_FEATURES], "cutoff_mn_pct": CUTOFF_MN_PCT},
+                            "features": [FEATURE_LABELS[f] for f in SURFACE_FEATURES], "cutoff_mn_pct": CUTOFF_MN_PCT,
+                            "real_data_features": list(real.get("features", [])),
+                            "tonnage": "Monte Carlo conceptual range per drill target (kriged grade and thickness, stated geometry); not a Mineral Resource"},
                 "module2": {"model": "Direct multi-horizon quantile XGBoost (α = 0.1/0.5/0.9) + split-conformal calibration",
                             "target": "Utilisation = production / rated monthly capacity", "n_features": len(FEATURES), "explainability": "Exact TreeSHAP (xgboost pred_contribs) on P50"},
                 "module3": {"solver": "Linear programme, HiGHS via scipy.optimize.linprog", "levers": ["reallocation", "blasting", "equipment", "maintenance", "weather", "shifts"]},

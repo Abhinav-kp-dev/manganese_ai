@@ -82,7 +82,8 @@ docs/              architecture, scientific integrity, demo script, jury Q&A, wh
 
 All values below are reproduced live by the running system (`/integrity`, `/forecast`, `/reserves`). They come from **synthetic** data, so they are optimistic relative to real MOIL records and must be re-measured after onboarding real data.
 
-- **Forecast, +1 month, held-out Sep 2025–Aug 2026 (n = 120):** P50 MAE 321 t, against 1,050 t for persistence and 867 t for seasonal-naive. P10–P90 coverage is 83% against 80% nominal.
+- **Forecast, held-out Sep 2025–Aug 2026 (n = 120 per horizon):** P50 MAE 418 t (+1 month), 470 t (+2) and 449 t (+3), against 1,050 / 1,157 / 1,320 t for persistence and 867 t for seasonal-naive. P10–P90 coverage is 85% / 79% / 78% against 80% nominal.
+  These figures went *up* from 321 t after two look-ahead leaks were removed: fleet health is now read at issue time for +2/+3 month forecasts, and the simulated rainfall outlook has realistic skill (anomaly correlation ≈ 0.55 instead of near-perfect foresight). `tests/test_leakage.py` keeps both fixed.
 - **Surface-proxy model:** spatial-block CV AUC 0.91 (95% CI 0.87–0.95) from 61 known occurrences. Random k-fold gives 0.93, which shows why random CV is optimistic.
 - **Kriging:** 3.3 %Mn MAE when interpolating inside drilled areas (a mean-only baseline gives 7.8). Beyond the ~14 km variogram range it is no better than the mean. The map shows this as uncertainty, and it is exactly the gap the satellite proxy covers.
 

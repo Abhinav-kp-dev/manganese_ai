@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CircleMarker, ImageOverlay, MapContainer, Marker, Polyline, TileLayer, Tooltip as LTooltip, useMapEvents } from "react-leaflet";
 import L from "leaflet";
-import { api, fmt, pct, useApi } from "../api.js";
+import { BASE, api, fmt, pct, useApi } from "../api.js";
 import { useI18n } from "../i18n.jsx";
 import { MiniBars, VariogramChart } from "../components/charts.jsx";
 import { Card, Note, PageHeader, StaleNote, Tag, useLoaded } from "../components/ui.jsx";
@@ -28,10 +28,22 @@ const LAYERS = {
   uncertainty: { label: "Uncertainty", color: HEAT, norm: (v) => v, legend: ["low", "", "", "high"], tag: "MODEL_INFERENCE" },
   kriged_grade_pct: { label: "Kriged Mn grade (%)", color: GRADE, norm: (v) => (v - 10) / 35, legend: ["10%", "", "27%", "", "45%"], tag: "MODEL_INFERENCE" },
   kriging_sd_pct: { label: "Kriging std. dev. (%)", color: HEAT, norm: (v) => v / 10, legend: ["0", "", "5", "", "10+"], tag: "MODEL_INFERENCE" },
+  p_grade_above_cutoff: { label: "P(grade ≥ cut-off) · Gaussian kriging", color: GRADE, norm: (v) => v, legend: ["0", "", "0.5", "", "1"], tag: "MODEL_INFERENCE" },
+  p_grade_above_cutoff_ik: { label: "P(grade ≥ cut-off) · indicator kriging", color: GRADE, norm: (v) => v, legend: ["0", "", "0.5", "", "1"], tag: "MODEL_INFERENCE" },
   surface_prob: { label: "Satellite surface proxy", color: PURPLE, norm: (v) => v, legend: ["0", "", "0.5", "", "1"], tag: "MODEL_INFERENCE" },
   data_support: { label: "Borehole data support", color: GRADE, norm: (v) => v, legend: ["none", "", "strong"], tag: "MODEL_INFERENCE" },
   cover_type: { label: "Surface cover (masks satellite signal)", categorical: true, tag: "OBSERVED" },
+  // Real data (Sentinel-2, Copernicus DEM, ESA WorldCover); served by /api/reserves/real.
+  surface_prob_real: { real: true, label: "REAL · surface model on Sentinel-2 + DEM (10 mine labels)", color: PURPLE, norm: (v) => v, legend: ["0", "", "0.5", "", "1"], tag: "MODEL_INFERENCE" },
+  ferric_ratio_b4_b2: { real: true, label: "REAL · Sentinel-2 ferric-iron ratio B4/B2", color: GRADE, norm: (v) => (v - 1.2) / 1.0, legend: ["1.2", "", "1.7", "", "2.2"], tag: "OBSERVED" },
+  clay_ratio_b11_b12: { real: true, label: "REAL · Sentinel-2 clay ratio B11/B12", color: GRADE, norm: (v) => (v - 1.2) / 0.6, legend: ["1.2", "", "1.5", "", "1.8"], tag: "OBSERVED" },
+  ndvi: { real: true, label: "REAL · Sentinel-2 NDVI (dry season)", color: GRADE, norm: (v) => v / 0.7, legend: ["0", "", "0.35", "", "0.7"], tag: "OBSERVED" },
+  elevation_m: { real: true, label: "REAL · Copernicus DEM elevation (m)", color: GRADE, norm: (v) => (v - 250) / 530, legend: ["250", "", "515", "", "780"], tag: "OBSERVED" },
+  slope_deg: { real: true, label: "REAL · Copernicus DEM slope (°)", color: HEAT, norm: (v) => v / 10, legend: ["0", "", "5", "", "10+"], tag: "OBSERVED" },
+  frac_bare: { real: true, label: "REAL · ESA WorldCover bare-ground fraction", color: HEAT, norm: (v) => v / 0.1, legend: ["0", "", "5%", "", "10%+"], tag: "OBSERVED" },
 };
+const IMAGERY = { none: "No satellite image", false_colour: "Sentinel-2 false colour (B12/B8/B4)", true_colour: "Sentinel-2 true colour" };
+const S2_ATTR = "Contains modified Copernicus Sentinel data 2024–2025 (ESA)";
 
 function useRaster(grid, layer) {
   return useMemo(() => {
@@ -39,16 +51,18 @@ function useRaster(grid, layer) {
     const { rows, cols } = grid;
     const vals = grid.layers[layer];
     const cfg = LAYERS[layer];
+    if (!vals) return null;
     const c = document.createElement("canvas");
     c.width = cols; c.height = rows;
     const ctx = c.getContext("2d");
     const img = ctx.createImageData(cols, rows);
     for (let r = 0; r < rows; r++) for (let q = 0; q < cols; q++) {
       const v = vals[r * cols + q];
-      const rgb = cfg.categorical ? COVER[v] : cfg.color(cfg.norm(v));
       const o = ((rows - 1 - r) * cols + q) * 4;
+      if (v === null || v === undefined) { img.data[o + 3] = 0; continue; }
+      const rgb = cfg.categorical ? COVER[v] : cfg.color(cfg.norm(v));
       img.data[o] = rgb[0]; img.data[o + 1] = rgb[1]; img.data[o + 2] = rgb[2];
-      img.data[o + 3] = layer === "confidence" ? Math.round(60 + 195 * Math.min(1, v * 1.6)) : 230;
+      img.data[o + 3] = layer === "confidence" || layer === "surface_prob_real" ? Math.round(60 + 195 * Math.min(1, v * 1.6)) : 230;
     }
     ctx.putImageData(img, 0, 0);
     return c.toDataURL();
@@ -68,11 +82,14 @@ export default function Reserves() {
   const pts = useApi("/api/reserves/points");
   const val = useApi("/api/reserves/validation");
   const mines = useApi("/api/mines");
+  const real = useApi("/api/reserves/real");
   const [layer, setLayer] = useState("confidence");
+  const [imagery, setImagery] = useState("none");
   const [opacity, setOpacity] = useState(0.8);
   const [show, setShow] = useState({ boreholes: true, occurrences: false, lineaments: true, targets: true, mines: true });
   const [cell, setCell] = useState(null);
-  const url = useRaster(grid.data, layer);
+  const realOk = !!real.data?.available;
+  const url = useRaster(LAYERS[layer].real ? (realOk ? real.data : null) : grid.data, layer);
   const pick = async ({ lat, lng }) => setCell(await api(`/api/reserves/cell?lat=${lat}&lon=${lng}`).catch(() => null));
   useEffect(() => { if (pts.data && !cell) pick({ lat: pts.data.drill_targets[0].latitude, lng: pts.data.drill_targets[0].longitude }); }, [pts.data]); // eslint-disable-line
 
@@ -92,11 +109,20 @@ export default function Reserves() {
 
       <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
         <Card id="reserve-map" title="Study area — Nagpur · Bhandara · Balaghat belt" tag={LAYERS[layer].tag}
-          right={<select className="input" value={layer} onChange={(e) => setLayer(e.target.value)}>{Object.entries(LAYERS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select>}>
+          right={
+            <div className="flex flex-wrap gap-2">
+              {realOk && <select className="input" aria-label="Satellite image" value={imagery} onChange={(e) => setImagery(e.target.value)}>{Object.entries(IMAGERY).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>}
+              <select className="input" aria-label="Map layer" value={layer} onChange={(e) => setLayer(e.target.value)}>
+                <optgroup label="Demo model (synthetic data)">{Object.entries(LAYERS).filter(([, v]) => !v.real).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</optgroup>
+                {realOk && <optgroup label="Real data (Sentinel-2, Copernicus DEM, WorldCover)">{Object.entries(LAYERS).filter(([, v]) => v.real).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</optgroup>}
+              </select>
+            </div>
+          }>
           <div className="h-[520px] overflow-hidden rounded-lg">
             <MapContainer bounds={bounds} className="h-full w-full">
               <TileLayer url={TILE_URL} attribution={TILE_ATTR} />
-              {url && <ImageOverlay key={layer} url={url} bounds={bounds} opacity={opacity} className="pixelated" />}
+              {realOk && imagery !== "none" && <ImageOverlay key={`img-${imagery}`} url={BASE + real.data.imagery[imagery]} bounds={bounds} opacity={1} attribution={S2_ATTR} />}
+              {url && <ImageOverlay key={layer} url={url} bounds={bounds} opacity={imagery !== "none" ? Math.min(opacity, 0.55) : opacity} className="pixelated" />}
               <ClickProbe onPick={pick} />
               {show.lineaments && pts.data?.lineaments.map((s, i) => <Polyline key={i} positions={s} pathOptions={{ color: "#94a3b8", weight: 1, opacity: 0.6, dashArray: "3 3" }} />)}
               {show.boreholes && pts.data?.boreholes.map((b) => (
@@ -129,6 +155,7 @@ export default function Reserves() {
       </div>
 
       {val.data && <Validation v={val.data} />}
+      {real.data && <RealData r={real.data} synthetic={val.data?.surface_validation} />}
       {pts.data && <DrillTargets targets={pts.data.drill_targets} onPick={pick} />}
     </div>
   );
@@ -165,6 +192,7 @@ function CellPanel({ cell }) {
       <div className="grid grid-cols-2 gap-2 text-sm">
         <Metric label="Kriged grade" v={`${s.kriged_grade_pct}% ±${s.kriging_sd_pct}`} />
         <Metric label="P(grade ≥ cut-off)" v={pct(s.p_grade_above_cutoff)} />
+        {s.p_grade_above_cutoff_ik !== undefined && <Metric label="Same, indicator kriging" v={pct(s.p_grade_above_cutoff_ik)} />}
         <Metric label="Borehole support" v={pct(s.data_support)} />
       </div>
       <h3 className="card-title mb-1 mt-4 flex items-center gap-2">Surface proxy <Tag kind="OBSERVED" /></h3>
@@ -217,6 +245,11 @@ function Validation({ v }) {
           </tbody>
         </table>
         <p className="mt-2 text-xs text-ink-400">{k.reading}</p>
+        {v.probability_models && (
+          <div className="mt-2 text-xs text-ink-300">
+            <b>P(grade ≥ cut-off), cross-validated Brier score</b> (lower is better): Gaussian kriging <span className="num">{v.probability_models.brier_gaussian_kriging.toFixed(3)}</span> · indicator kriging <span className="num">{v.probability_models.brier_indicator_kriging.toFixed(3)}</span> · base rate only <span className="num">{v.probability_models.brier_climatology.toFixed(3)}</span>
+          </div>
+        )}
         <h3 className="card-title mb-1 mt-3">Variogram (spherical fit, range {v.variogram.range_km.toFixed(1)} km)</h3>
         <VariogramChart variogram={v.variogram} />
       </Card>
@@ -236,24 +269,83 @@ function Validation({ v }) {
   );
 }
 
+function RealData({ r, synthetic }) {
+  if (!r.available) return <Note tone="warn">Real-data check unavailable: {r.reason}</Note>;
+  const v = r.validation;
+  const rows = [
+    ["Spatial-block CV AUC", synthetic?.spatial_cv_auc?.toFixed(3), v.spatial_cv_auc.toFixed(3)],
+    ["95% bootstrap CI", synthetic && `${synthetic.spatial_cv_auc_ci95[0].toFixed(2)}–${synthetic.spatial_cv_auc_ci95[1].toFixed(2)}`, `${v.spatial_cv_auc_ci95[0].toFixed(2)}–${v.spatial_cv_auc_ci95[1].toFixed(2)}`],
+    ["Positives / background", synthetic && `${synthetic.n_positive} / ${synthetic.n_pseudo_absence}`, `${v.n_positive} / ${v.n_pseudo_absence}`],
+    ["Bare/built-ground baseline AUC", "—", r.disturbance_auc?.toFixed(3)],
+  ];
+  return (
+    <div id="real-data" className="grid gap-4 xl:grid-cols-3">
+      <Card title="Real-data check — does the surface proxy work on real satellite data?" tag="MODEL_INFERENCE">
+        <table className="data text-sm">
+          <thead><tr><th>Metric</th><th className="text-right">Synthetic demo</th><th className="text-right">Real data</th></tr></thead>
+          <tbody>{rows.map(([k, a, b]) => <tr key={k}><td>{k}</td><td className="num text-right">{a ?? "—"}</td><td className="num text-right">{b ?? "—"}</td></tr>)}</tbody>
+        </table>
+        <Note tone="warn">
+          On real Sentinel-2 + Copernicus DEM features with {v.n_positive} real manganese locations, the spatial-CV AUC is {v.spatial_cv_auc.toFixed(2)} (95% CI {v.spatial_cv_auc_ci95[0].toFixed(2)}–{v.spatial_cv_auc_ci95[1].toFixed(2)}).{" "}
+          {v.spatial_cv_auc_ci95[0] > 0.5
+            ? <>The interval is above 0.5, so the surface proxy shows <b>some skill on real data</b>.</>
+            : <>The interval includes 0.5, so the surface proxy has <b>not yet shown skill on real data</b>.</>}{" "}
+          {r.disturbance_auc !== null && r.disturbance_auc >= v.spatial_cv_auc - 0.05
+            ? <>Bare/built ground alone scores {r.disturbance_auc.toFixed(2)}, about as well or better, so any apparent skill could be mining disturbance rather than geology. </>
+            : <>Bare/built ground alone scores {r.disturbance_auc?.toFixed(2)}. </>}
+          The synthetic figure is not evidence of real-world performance.
+        </Note>
+      </Card>
+      <Card title="Single-feature signal at the real Mn locations" tag="OBSERVED">
+        <table className="data text-xs">
+          <thead><tr><th>Feature</th><th className="text-right">AUC</th><th>Direction</th></tr></thead>
+          <tbody>{r.univariate.map((u) => <tr key={u.feature}><td>{u.label}</td><td className="num text-right">{u.auc.toFixed(2)}</td><td className="text-ink-400">{u.direction}</td></tr>)}</tbody>
+        </table>
+        <p className="mt-2 text-xs text-ink-400">0.5 = no signal. With {v.n_positive} positives, values between roughly 0.3 and 0.7 are within noise.</p>
+      </Card>
+      <Card title="Labels and imagery used" tag="OBSERVED">
+        <ul className="space-y-1 text-xs">
+          {r.labels.map((l) => (
+            <li key={l.name} className={l.use_for_training && l.inside_study_area ? "text-ink-100" : "text-ink-400 line-through"} title={l.note || ""}>
+              {l.name} <span className="text-ink-400">· ±{l.location_precision_km} km · {l.source}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-xs text-ink-400">{r.provenance.scenes.length} Sentinel-2 L2A scenes ({r.provenance.season.map((s) => s.year).join(", ")}, Feb–Apr, cloud-masked median) · Copernicus DEM ({r.provenance.dem_tiles.length} tiles) · ESA WorldCover {r.provenance.worldcover_tiles.join(", ")}. Built {r.provenance.generated_at.slice(0, 10)}.</p>
+        <p className="mt-1 text-xs text-ink-400">Not available openly: {Object.keys(r.provenance.not_available).join("; ")}.</p>
+        <p className="mt-1 text-[10px] text-ink-400">{r.provenance.attribution.join(" ")}</p>
+      </Card>
+    </div>
+  );
+}
+
 function DrillTargets({ targets, onPick }) {
   return (
     <Card id="drill-targets" title="Drill-target shortlist — ranked by value of information" tag="MODEL_INFERENCE">
       <div className="overflow-x-auto">
         <table className="data">
-          <thead><tr><th>#</th><th>Location</th><th>Zone</th><th className="text-right">Confidence</th><th className="text-right">Uncertainty</th><th className="text-right">VOI</th><th>Cover</th><th>Rationale</th></tr></thead>
+          <thead><tr><th>#</th><th>Location</th><th>Zone</th><th className="text-right">Confidence</th><th className="text-right">Uncertainty</th><th className="text-right">VOI</th><th>Cover</th><th className="text-right">P(ore)</th><th className="text-right">Ore, Mt (P10 · P50 · P90)</th><th>Rationale</th></tr></thead>
           <tbody>
             {targets.map((d) => (
               <tr key={d.target_id} className="cursor-pointer hover:bg-ink-800/60" onClick={() => onPick({ lat: d.latitude, lng: d.longitude })}>
                 <td className="font-mono">{d.target_id}</td><td className="font-mono text-xs">{d.latitude}, {d.longitude}</td><td>{d.zone}</td>
                 <td className="num text-right">{d.confidence.toFixed(2)}</td><td className="num text-right">{d.uncertainty.toFixed(2)}</td><td className="num text-right">{d.value_of_information.toFixed(2)}</td>
-                <td className="text-xs">{d.cover}</td><td className="text-xs text-ink-300">{d.reasons.join(" · ")}</td>
+                <td className="text-xs">{d.cover}</td>
+                <td className="num text-right">{d.tonnage ? pct(d.tonnage.p_ore_present) : "—"}</td>
+                <td className="num whitespace-nowrap text-right">{d.tonnage ? d.tonnage.ore_tonnes_p10_p50_p90.map((x) => fmt(x / 1e6, 2)).join(" · ") : "—"}</td>
+                <td className="text-xs text-ink-300">{d.reasons.join(" · ")}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <p className="mt-2 text-xs text-ink-400">VOI = confidence × uncertainty: holes where the ground looks promising <i>and</i> is least constrained teach the most. Cells within 3 km of operating leases are excluded. {fmt(targets.length)} targets, ≥ 6 km apart.</p>
+      {targets[0]?.tonnage && (
+        <div className="mt-2"><Note tone="warn">
+          Tonnage columns: {targets[0].tonnage.label} Assumed strike {targets[0].tonnage.assumptions.strike_length_m.join("–")} m, down-dip {targets[0].tonnage.assumptions.down_dip_extent_m.join("–")} m,
+          continuity {targets[0].tonnage.assumptions.continuity_fraction.join("–")}, density {targets[0].tonnage.assumptions.bulk_density_t_m3.join("–")} t/m³; grade and thickness from kriging. P(ore) is the chance the block clears the cut-off at all; a P10 or P50 of 0 means it may not.
+        </Note></div>
+      )}
     </Card>
   );
 }

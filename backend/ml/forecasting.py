@@ -147,7 +147,9 @@ def forecast(panel: pd.DataFrame, trained: dict, overrides: dict | None = None) 
     for h in HORIZONS:
         p = panel.copy()
         target_month = last + pd.DateOffset(months=h)
-        sel = p.month == target_month
+        # Overrides apply to every plan month up to the target, so lagged plan inputs (fleet health
+        # is read at month t-h+1) respond to a what-if at every horizon.
+        sel = (p.month > last) & (p.month <= target_month)
         for mine_id, changes in overrides.items():
             ms = sel & ((p.mine_id == mine_id) | (mine_id == "*"))
             for col, fn in changes.items():

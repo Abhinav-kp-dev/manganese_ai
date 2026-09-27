@@ -1,0 +1,301 @@
+{
+  "generated_at": "2026-09-27T20:06:33+00:00",
+  "generator": "backend/ml/remote_sensing.py",
+  "grid": {
+    "bbox": {
+      "lat_min": 21.2,
+      "lat_max": 22.1,
+      "lon_min": 78.8,
+      "lon_max": 80.6
+    },
+    "cell_deg": 0.02,
+    "rows": 45,
+    "cols": 90,
+    "composite_bin_deg": 0.002,
+    "s2_read_resolution_m": 80.0
+  },
+  "sentinel2": {
+    "collection": "Sentinel-2 L2A (sentinel-s2-l2a-cogs)",
+    "tiles": [
+      "44QKJ",
+      "44QKK",
+      "44QLJ",
+      "44QLK",
+      "44QMJ",
+      "44QMK"
+    ],
+    "season": [
+      {
+        "year": 2024,
+        "months": [
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "year": 2025,
+        "months": [
+          2,
+          3,
+          4
+        ]
+      }
+    ],
+    "max_cloud_pct": 10.0,
+    "scl_masked_classes": [
+      0,
+      1,
+      3,
+      8,
+      9,
+      10,
+      11
+    ],
+    "scenes": [
+      {
+        "tile": "44QKJ",
+        "id": "S2A_44QKJ_20250328_1_L2A",
+        "datetime": "2025-03-28T05:33:07.792000Z",
+        "cloud_pct": 5.2e-05,
+        "nodata_pct": 10.727536,
+        "baseline": "05.11",
+        "valid_pixels_80m": 1680994,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QKJ",
+        "id": "S2B_44QKJ_20240306_0_L2A",
+        "datetime": "2024-03-06T05:32:54.720000Z",
+        "cloud_pct": 0.000666,
+        "nodata_pct": 11.265029,
+        "baseline": "05.10",
+        "valid_pixels_80m": 1670855,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QKJ",
+        "id": "S2B_44QKJ_20240205_0_L2A",
+        "datetime": "2024-02-05T05:32:58.283000Z",
+        "cloud_pct": 0.000132,
+        "nodata_pct": 11.925972,
+        "baseline": "05.10",
+        "valid_pixels_80m": 1658433,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QKK",
+        "id": "S2A_44QKK_20250328_1_L2A",
+        "datetime": "2025-03-28T05:32:53.625000Z",
+        "cloud_pct": 0.0,
+        "nodata_pct": 0.003086,
+        "baseline": "05.11",
+        "valid_pixels_80m": 1882337,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QKK",
+        "id": "S2B_44QKK_20240205_0_L2A",
+        "datetime": "2024-02-05T05:32:44.099000Z",
+        "cloud_pct": 0.0,
+        "nodata_pct": 0.055149,
+        "baseline": "05.10",
+        "valid_pixels_80m": 1881387,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QKK",
+        "id": "S2A_44QKK_20240220_0_L2A",
+        "datetime": "2024-02-20T05:32:43.512000Z",
+        "cloud_pct": 0.000163,
+        "nodata_pct": 0.060348,
+        "baseline": "05.10",
+        "valid_pixels_80m": 1881285,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QLJ",
+        "id": "S2B_44QLJ_20240402_0_L2A",
+        "datetime": "2024-04-02T05:22:59.835000Z",
+        "cloud_pct": 0.000136,
+        "nodata_pct": 0.0,
+        "baseline": "05.10",
+        "valid_pixels_80m": 1882383,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QLJ",
+        "id": "S2B_44QLJ_20250216_0_L2A",
+        "datetime": "2025-02-16T05:23:05.735000Z",
+        "cloud_pct": 0.000229,
+        "nodata_pct": 0.0,
+        "baseline": "05.11",
+        "valid_pixels_80m": 1882381,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QLJ",
+        "id": "S2A_44QLJ_20240417_0_L2A",
+        "datetime": "2024-04-17T05:23:04.199000Z",
+        "cloud_pct": 0.000139,
+        "nodata_pct": 3e-06,
+        "baseline": "05.10",
+        "valid_pixels_80m": 1882382,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QLK",
+        "id": "S2B_44QLK_20240313_0_L2A",
+        "datetime": "2024-03-13T05:22:43.728000Z",
+        "cloud_pct": 0.0,
+        "nodata_pct": 0.0,
+        "baseline": "05.10",
+        "valid_pixels_80m": 1882384,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QLK",
+        "id": "S2C_44QLK_20250211_0_L2A",
+        "datetime": "2025-02-11T05:23:12.259000Z",
+        "cloud_pct": 1e-05,
+        "nodata_pct": 0.0,
+        "baseline": "05.11",
+        "valid_pixels_80m": 1882384,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QLK",
+        "id": "S2B_44QLK_20250308_0_L2A",
+        "datetime": "2025-03-08T05:22:49.457000Z",
+        "cloud_pct": 8.6e-05,
+        "nodata_pct": 0.0,
+        "baseline": "05.11",
+        "valid_pixels_80m": 1882384,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QMJ",
+        "id": "S2B_44QMJ_20250407_0_L2A",
+        "datetime": "2025-04-07T05:22:58.786000Z",
+        "cloud_pct": 0.0,
+        "nodata_pct": 0.0,
+        "baseline": "05.11",
+        "valid_pixels_80m": 1882384,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QMJ",
+        "id": "S2B_44QMJ_20240323_0_L2A",
+        "datetime": "2024-03-23T05:22:58.181000Z",
+        "cloud_pct": 0.000252,
+        "nodata_pct": 0.0,
+        "baseline": "05.10",
+        "valid_pixels_80m": 1882380,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QMJ",
+        "id": "S2C_44QMJ_20250313_0_L2A",
+        "datetime": "2025-03-13T05:23:20.639000Z",
+        "cloud_pct": 1.3e-05,
+        "nodata_pct": 0.0,
+        "baseline": "05.11",
+        "valid_pixels_80m": 1882384,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QMK",
+        "id": "S2A_44QMK_20240308_0_L2A",
+        "datetime": "2024-03-08T05:22:43.850000Z",
+        "cloud_pct": 0.0,
+        "nodata_pct": 0.0,
+        "baseline": "05.10",
+        "valid_pixels_80m": 1882384,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QMK",
+        "id": "S2B_44QMK_20250206_0_L2A",
+        "datetime": "2025-02-06T05:22:44.722000Z",
+        "cloud_pct": 0.0,
+        "nodata_pct": 0.0,
+        "baseline": "05.11",
+        "valid_pixels_80m": 1882384,
+        "declared_offset_applied": false
+      },
+      {
+        "tile": "44QMK",
+        "id": "S2B_44QMK_20250308_0_L2A",
+        "datetime": "2025-03-08T05:22:46.198000Z",
+        "cloud_pct": 0.0,
+        "nodata_pct": 0.0,
+        "baseline": "05.11",
+        "valid_pixels_80m": 1882384,
+        "declared_offset_applied": false
+      }
+    ]
+  },
+  "dem": {
+    "collection": "Copernicus DEM GLO-30",
+    "tiles": [
+      "Copernicus_DSM_COG_10_N21_00_E078_00_DEM",
+      "Copernicus_DSM_COG_10_N21_00_E079_00_DEM",
+      "Copernicus_DSM_COG_10_N21_00_E080_00_DEM",
+      "Copernicus_DSM_COG_10_N22_00_E078_00_DEM",
+      "Copernicus_DSM_COG_10_N22_00_E079_00_DEM",
+      "Copernicus_DSM_COG_10_N22_00_E080_00_DEM"
+    ],
+    "read_step_deg": 0.0008333333333333334
+  },
+  "worldcover": {
+    "collection": "ESA WorldCover 10 m 2021 v200",
+    "tiles": [
+      "N21E078"
+    ],
+    "read_step_deg": 0.001
+  },
+  "imagery": {
+    "s2_true_colour.png": "B4/B3/B2 median",
+    "s2_false_colour_swir.png": "B12/B8/B4 median (geology false colour)",
+    "bounds": [
+      [
+        21.2,
+        78.8
+      ],
+      [
+        22.1,
+        80.6
+      ]
+    ]
+  },
+  "features": {
+    "sentinel2": [
+      "ferric_ratio_b4_b2",
+      "clay_ratio_b11_b12",
+      "ndvi",
+      "ndwi"
+    ],
+    "dem": [
+      "elevation_m",
+      "slope_deg",
+      "ruggedness_m"
+    ],
+    "land_cover": [
+      "frac_tree",
+      "frac_shrub_grass",
+      "frac_cropland",
+      "frac_built",
+      "frac_bare",
+      "frac_water"
+    ]
+  },
+  "not_available": {
+    "sar_vv_db, sar_vh_db": "No Sentinel-1 analysis-ready archive covering India is openly readable without an account.",
+    "dist_lineament_km, lithology_favourability": "Need GSI Bhukosh 1:50k geology and structure layers (login required)."
+  },
+  "attribution": [
+    "Contains modified Copernicus Sentinel data 2024-2025 (ESA), accessed via the AWS Open Data 'sentinel-cogs' archive.",
+    "Copernicus DEM GLO-30: produced using Copernicus WorldDEM-30 (c) DLR e.V. 2010-2014 and (c) Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA; all rights reserved.",
+    "ESA WorldCover 10 m 2021 v200 (c) ESA WorldCover project / contains modified Copernicus Sentinel data (2021) processed by the ESA WorldCover consortium; CC BY 4.0."
+  ]
+}

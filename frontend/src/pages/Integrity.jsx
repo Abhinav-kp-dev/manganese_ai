@@ -27,6 +27,23 @@ export default function Integrity() {
         </ul>
       </Card>
 
+      {d.real_vs_synthetic && (
+        <Card id="real-vs-synthetic" title="Synthetic demo vs real data — the same metrics side by side">
+          <div className="overflow-x-auto">
+            <table className="data text-sm">
+              <thead><tr><th>Metric</th><th className="text-right">Synthetic demo</th><th className="text-right">Real data</th><th>Note</th></tr></thead>
+              <tbody>{d.real_vs_synthetic.map((r) => (
+                <tr key={r.metric}><td>{r.metric}</td>
+                  <td className="num text-right">{show(r.synthetic)}</td>
+                  <td className="num text-right">{r.real === null ? <span className="text-ink-400">not yet available</span> : show(r.real)}</td>
+                  <td className="text-xs text-ink-400">{r.note}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-xs text-ink-400">Synthetic numbers show that the pipeline works end to end; only the real-data column says anything about MOIL's ground.</p>
+        </Card>
+      )}
+
       <div className="grid gap-4 xl:grid-cols-3">
         <Card title="Model card">
           {Object.entries(d.model_card).map(([k, v]) => (
@@ -56,7 +73,7 @@ export default function Integrity() {
             <thead><tr><th>Source</th><th>Provides</th><th>Used for</th><th>Status in this demo</th></tr></thead>
             <tbody>{d.data_sources.map((s) => (
               <tr key={s.name}><td><a href={s.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-mn-300">{s.name}<ExternalLink className="h-3 w-3" /></a></td><td className="text-xs text-ink-300">{s.provides}</td><td className="text-xs text-ink-300">{s.used_for}</td>
-                <td><span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${s.status === "PUBLIC_REFERENCE" ? "bg-sky-500/15 text-sky-300" : "bg-amber-500/15 text-amber-300"}`}>{s.status.replace(/_/g, " ")}</span></td></tr>
+                <td><span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${s.status === "PUBLIC_REFERENCE" ? "bg-sky-500/15 text-sky-300" : s.status === "REAL_IN_VALIDATION" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>{s.status.replace(/_/g, " ")}</span></td></tr>
             ))}</tbody>
           </table>
         </div>
@@ -67,6 +84,8 @@ export default function Integrity() {
     </div>
   );
 }
+
+const show = (v) => (v === null || v === undefined ? "—" : Array.isArray(v) ? v.join("–") : String(v));
 
 function Pipeline({ canRun }) {
   const q = useApi("/api/pipeline");
