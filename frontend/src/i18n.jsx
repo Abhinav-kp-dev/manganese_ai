@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 const DICT = {
   en: {
-    appName: "Manganese Horizon",
+    appName: "MnPulse",
     tagline: "Reserve confidence · Shortfall forecasting · Corrective actions",
     nav_overview: "Command Centre", nav_reserves: "Reserve Confidence", nav_forecast: "Shortfall Forecast",
     nav_actions: "Corrective Actions", nav_scenarios: "What-if Scenarios", nav_integrity: "Data & Integrity", nav_report: "Executive Brief",
@@ -24,7 +24,7 @@ const DICT = {
     language: "Language",
   },
   hi: {
-    appName: "मैंगनीज़ होराइज़न",
+    appName: "MnPulse",
     tagline: "भंडार विश्वसनीयता · उत्पादन कमी पूर्वानुमान · सुधारात्मक कदम",
     nav_overview: "कमांड सेंटर", nav_reserves: "भंडार विश्वसनीयता", nav_forecast: "कमी पूर्वानुमान",
     nav_actions: "सुधारात्मक कदम", nav_scenarios: "क्या-अगर परिदृश्य", nav_integrity: "डेटा व सत्यनिष्ठा", nav_report: "कार्यकारी सारांश",
@@ -46,7 +46,7 @@ const DICT = {
     language: "भाषा",
   },
   mr: {
-    appName: "मँगनीज होरायझन",
+    appName: "MnPulse",
     tagline: "साठा विश्वासार्हता · उत्पादन तूट अंदाज · सुधारात्मक उपाय",
     nav_overview: "कमांड सेंटर", nav_reserves: "साठा विश्वासार्हता", nav_forecast: "तूट अंदाज",
     nav_actions: "सुधारात्मक उपाय", nav_scenarios: "जर-तर परिस्थिती", nav_integrity: "डेटा व सचोटी", nav_report: "कार्यकारी सारांश",

@@ -1,4 +1,4 @@
-"""Manganese Horizon API + static dashboard server."""
+"""MnPulse API + static dashboard server."""
 from __future__ import annotations
 
 import logging
@@ -19,7 +19,7 @@ from .auth import seed_users
 from .state import STATE
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-log = logging.getLogger("manganese_horizon")
+log = logging.getLogger("mnpulse")
 FRONTEND_DIST = Path(os.getenv("MH_FRONTEND_DIST", Path(__file__).resolve().parents[2] / "frontend" / "dist"))
 
 
@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Manganese Horizon API", version="1.0.0", lifespan=lifespan,
+app = FastAPI(title="MnPulse API", version="1.0.0", lifespan=lifespan,
               description="SIH26009 — reserve confidence mapping, shortfall forecasting and corrective actions for MOIL.")
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(CORSMiddleware, allow_origins=os.getenv("MH_CORS_ORIGINS", "http://localhost:5173").split(","),

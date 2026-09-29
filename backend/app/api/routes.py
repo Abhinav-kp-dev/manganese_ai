@@ -29,7 +29,7 @@ from ..state import STATE
 public = APIRouter(prefix="/api")
 router = APIRouter(prefix="/api", dependencies=[Depends(require("read"))])
 MINE = {m["mine_id"]: m for m in MINES}
-APP_NAME = "Manganese Horizon"
+APP_NAME = "MnPulse"
 
 
 def _ready():

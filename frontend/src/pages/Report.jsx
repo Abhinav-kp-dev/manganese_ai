@@ -24,7 +24,7 @@ export default function Report() {
       </div>
       <article className="print-page mx-auto max-w-4xl space-y-5 rounded-xl border border-ink-700 bg-ink-900 p-8 text-sm leading-relaxed">
         <header className="border-b border-ink-700 pb-3">
-          <div className="text-xs uppercase tracking-wider text-ink-400">Manganese Horizon · SIH26009 · MOIL Limited</div>
+          <div className="text-xs uppercase tracking-wider text-ink-400">MnPulse · SIH26009 · MOIL Limited</div>
           <h2 className="text-2xl font-bold">Production continuity brief — {monthLabel(ov.month)}</h2>
           <div className="text-xs text-ink-400">Generated {new Date().toLocaleString("en-IN")} · model {meta.data?.model_version} · data mode {meta.data?.data_mode}</div>
           {meta.data?.data_mode !== "REAL" && <div className="mt-2 rounded border border-amber-500/50 px-2 py-1 text-xs text-amber-300">DEMO DATA — values are simulated and not validated for MOIL operations.</div>}

@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icon.svg"],
       manifest: {
-        name: "Manganese Horizon",
-        short_name: "Mn Horizon",
+        name: "MnPulse",
+        short_name: "MnPulse",
         description: "Reserve confidence, shortfall forecasting and corrective actions for MOIL (SIH26009).",
         theme_color: "#0b0f17",
         background_color: "#0b0f17",

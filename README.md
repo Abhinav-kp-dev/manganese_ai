@@ -1,5 +1,5 @@
-# Manganese Horizon
-
+# MnPulse
+ 
 **AI decision support for MOIL: where to drill next, whether next month's target will be met, and what to do about it.**
 
 Smart India Hackathon 2026 · Problem Statement **SIH26009** — *Using AI/ML and Space Technology to Identify Manganese Reserves and Overcome Production Shortfalls* · Ministry of Steel (MOIL Limited) · Theme: Space Technology · Software
@@ -8,7 +8,7 @@ Smart India Hackathon 2026 · Problem Statement **SIH26009** — *Using AI/ML an
 
 ## The idea in one paragraph
 
-SIH26009 is really **two problems**. *Where is the ore?* is a geology problem: satellites cannot see ore underground, so borehole data does the sub-surface work and satellite imagery only narrows where to drill next. *Will we hit production?* is an equipment, weather and blasting problem, and this is where the four satellite variables in the statement (rainfall, soil moisture, NDVI, land-surface temperature) earn their place. Manganese Horizon answers both, then turns a forecast shortfall into an optimised, auditable action plan. Every number it shows says whether it is **observed**, a **forecast**, a **model inference** or a **scenario**.
+SIH26009 is really **two problems**. *Where is the ore?* is a geology problem: satellites cannot see ore underground, so borehole data does the sub-surface work and satellite imagery only narrows where to drill next. *Will we hit production?* is an equipment, weather and blasting problem, and this is where the four satellite variables in the statement (rainfall, soil moisture, NDVI, land-surface temperature) earn their place. MnPulse answers both, then turns a forecast shortfall into an optimised, auditable action plan. Every number it shows says whether it is **observed**, a **forecast**, a **model inference** or a **scenario**.
 
 | Module | Question | Method |
 |---|---|---|
