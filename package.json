@@ -1,0 +1,7 @@
+{
+  "name": "manganese-ai",
+  "private": true,
+  "scripts": {
+    "build": "cd frontend && npm run build"
+  }
+}
