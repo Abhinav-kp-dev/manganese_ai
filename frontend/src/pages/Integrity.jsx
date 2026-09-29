@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { CheckCircle2, Download, ExternalLink, Play, Upload, XCircle } from "lucide-react";
-import { api, useApi } from "../api.js";
+import { BASE, api, useApi } from "../api.js";
 import { useI18n } from "../i18n.jsx";
 import { useAuth } from "../auth.jsx";
 import { Card, Note, PageHeader, StaleNote, useLoaded } from "../components/ui.jsx";
@@ -145,7 +145,7 @@ function Uploader({ onDone }) {
     finally { setBusy(false); }
   };
   return (
-    <Card title="Onboard real MOIL production logs (CSV)" right={<a className="btn-ghost text-xs" href="/api/data/template" download="production_logs_template.csv"><Download className="h-3 w-3" /> Template</a>}>
+    <Card title="Onboard real MOIL production logs (CSV)" right={<a className="btn-ghost text-xs" href={`${BASE}/api/data/template`} download="production_logs_template.csv"><Download className="h-3 w-3" /> Template</a>}>
       <p className="mb-3 text-sm text-ink-300">Upload monthly logs in the canonical schema. Rows are validated (mine IDs, month-start dates, physical ranges, duplicates) before anything is stored. Committed rows are stored with <code>is_synthetic = FALSE</code> and the models retrain.</p>
       <div className="flex flex-wrap items-center gap-2">
         <input type="file" accept=".csv,text/csv" onChange={(e) => { setFile(e.target.files[0]); setRep(null); }} className="text-sm" />
